@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   LogOut, Camera, Mail, Phone, MapPin, Edit3, X, Check,
   MessageCircle, Image as ImageIcon, Plus, Trash2, Briefcase,
-  Sparkles, Bell,
+  Sparkles, Bell, AlertTriangle,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,8 @@ export function ProviderProfileTab({
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? '');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
@@ -210,10 +212,32 @@ export function ProviderProfileTab({
     toast.success('تم حذف العمل');
   };
 
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+      toast.success('تم تسجيل الخروج بنجاح');
+    } catch (e) {
+      toast.error('تعذّر تسجيل الخروج، حاول مرة أخرى');
+    } finally {
+      setSigningOut(false);
+      setSignOutOpen(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 pt-3 pb-2 shrink-0">
+      <div className="px-4 pt-3 pb-2 shrink-0 flex items-center justify-between gap-2">
         <h2 className="text-base font-bold">الملف الشخصي</h2>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setSignOutOpen(true)}
+          className="h-9 rounded-xl text-xs text-destructive hover:text-destructive hover:bg-destructive/5 border-destructive/20 font-medium"
+        >
+          <LogOut className="w-3.5 h-3.5 ml-1.5" />
+          خروج
+        </Button>
       </div>
 
       <ScrollArea className="flex-1">
@@ -495,7 +519,7 @@ export function ProviderProfileTab({
 
           <Button
             variant="outline"
-            onClick={() => signOut()}
+            onClick={() => setSignOutOpen(true)}
             className="w-full h-12 rounded-xl text-destructive hover:text-destructive hover:bg-destructive/5 font-semibold"
           >
             <LogOut className="w-4 h-4 ml-2" />
@@ -507,6 +531,51 @@ export function ProviderProfileTab({
           </div>
         </div>
       </ScrollArea>
+
+      {/* Sign-out confirmation dialog */}
+      <Dialog open={signOutOpen} onOpenChange={setSignOutOpen}>
+        <DialogContent className="rounded-3xl max-w-sm">
+          <DialogHeader>
+            <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mx-auto mb-2">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-center text-lg">تأكيد تسجيل الخروج</DialogTitle>
+            <DialogDescription className="text-center">
+              هل أنت متأكد من تسجيل الخروج من حسابك؟
+              <br />
+              ستحتاج لإدخال البريد وكلمة السر للدخول مجددًا.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => setSignOutOpen(false)}
+              disabled={signingOut}
+              className="flex-1 h-11 rounded-xl"
+            >
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className="flex-1 h-11 rounded-xl"
+            >
+              {signingOut ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin ml-2" />
+                  جاري الخروج…
+                </>
+              ) : (
+                <>
+                  <LogOut className="w-4 h-4 ml-2" />
+                  نعم، خروج
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Catalog add dialog */}
       <Dialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen}>
