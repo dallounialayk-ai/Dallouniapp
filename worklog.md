@@ -195,3 +195,48 @@ Stage Summary:
   • /home/z/my-project/download/scroll-test-user-profile.png
   • /home/z/my-project/download/scroll-desktop-provider-home.png
   • /home/z/my-project/download/scroll-provider-home-with-scrollbar.png
+
+---
+Task ID: save-project-state
+Agent: Super Z (main agent)
+Task: حفظ حالة المشروع بالكامل قبل التوقف لإكماله في جلسة قادمة
+
+Work Log:
+- تنظيم لقطات الشاشة في مجلد download/screenshots/ (14 لقطة)
+- إنشاء ملف PROJECT_STATE.md شامل يحتوي على:
+  • ملخص المشروع والتقنيات المستخدمة
+  • قائمة تفصيلية بكل ما تم إنجازه (9 أقسام رئيسية)
+  • البيانات المختبرة في قاعدة البيانات (حسابات + بيانات تجريبية)
+  • هيكل الملفات الكامل مع وصف لكل ملف
+  • إعدادات Supabase الحالية (URL, RLS, Storage, Realtime, Auth)
+  • قائمة ما لم يُنجز بعد مقسّمة لأولويات (عالية/متوسطة/منخفضة)
+  • الإصلاحات المعروفة
+  • معلومات مهمة للاستئناف
+- إنشاء ملف RESUME_GUIDE.md يحتوي على:
+  • خطوات البدء السريع (3 خطوات)
+  • قائمة الملفات للقراءة بالترتيب
+  • أولويات العمل القادم مع توصيات
+  • أوامر مفيدة (lint, browser, db management)
+  • تحذيرات مهمة (لا build, لا port غير 3000, إلخ)
+  • معايير التصميم (Apple Design System, RTL, content depth)
+  • بنية المكونات وتدفق البيانات
+  • نصائح وإرشادات للعمل القادم
+  • تعليمات ما بعد الانتهاء من المهمة القادمة
+
+Stage Summary:
+- تم حفظ حالة المشروع بالكامل في 3 ملفات:
+  • PROJECT_STATE.md — الحالة الكاملة
+  • RESUME_GUIDE.md — دليل الاستئناف السريع
+  • worklog.md — سجل كل التعديلات (8 أقسام)
+- جميع لقطات الشاشة منظمة في download/screenshots/
+- التطبيق في حالة "نسخة أولية كاملة قابلة للاستخدام" (85% مكتمل)
+- عند العودة، يكفي قراءة RESUME_GUIDE.md للبدء بسرعة
+- لا حاجة لإعادة تطبيق schema.sql — قاعدة البيانات جاهزة وعاملة
+- لا حاجة لإعادة ضبط Supabase — تأكيد البريد معطّل والتسجيل يعمل فورًا
+- حسابات اختبار جاهزة: test_user_logout_demo@example.com و test_provider_logout2@example.com (كلمة السر: test123456)
+
+ملاحظات للمستخدم:
+- المشروع محفوظ في /home/z/my-project/
+- جميع الملفات محفوظة بشكل دائم
+- قاعدة البيانات على Supabase تعمل ولا تحتاج إعادة إعداد
+- للاستئناف في يوم آخر: فقط اقرأ RESUME_GUIDE.md
