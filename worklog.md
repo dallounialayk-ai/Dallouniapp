@@ -59,3 +59,41 @@ Notes for Next Iteration:
 - يمكن إضافة تحقق من رقم الهاتف عبر OTP لاحقًا
 - يمكن إضافة نظام محادثة صوتية/فيديو لاحقًا
 - يمكن إضافة بوابة دفع للعروض المقبولة
+
+---
+Task ID: fix-rate-limit
+Agent: Super Z (main agent)
+Task: معالجة خطأ "email rate limit exceeded" عند تسجيل صاحب خدمة جديد
+
+Work Log:
+- تشخيص السبب: Supabase Auth يرسل بريد تأكيد تلقائيًا لكل مستخدم جديد، والخطة المجانية تحدّ هذه الرسائل بـ 3-4 في الساعة
+- إنشاء ملف src/lib/auth-errors.ts يحتوي على:
+  • translateAuthError: دالة تترجم جميع أخطاء Supabase Auth إلى رسائل عربية واضحة
+  • AUTH_ERROR_CODES: قائمة بكل أكواد الأخطاء المعروفة
+  • isRateLimitError: دالة للتمييز البرمجي
+- تحديث src/store/auth.ts لاستخدام translateAuthError في signUp و signIn و catch blocks
+- إضافة حالة خاصة: إذا تم إنشاء المستخدم لكن لم يرجع session → يحتاج تأكيد بريد
+- تحديث src/components/auth/AuthScreen.tsx بإضافة:
+  • ErrorBanner: بانر خطأ متحرك مع زر إغلاق، يغير لونه حسب نوع الخطأ (amber للتحذير، red للخطأ)
+  • EmailConfirmationGuide: دليل خطوة بخطوة (5 خطوات) لإيقاف تأكيد البريد في Supabase
+    مع رابط مباشر إلى Auth Providers + شرح بصري واضح
+  • عرض الدليل تلقائيًا عند ظهور خطأ rate limit أو needs_email_confirmation
+- اختبار Agent Browser:
+  • فتح صفحة التسجيل → اختيار صاحب خدمة → ملء كل الحقول → إرسال
+  • تم عرض الدليل فورًا مع رابط Auth Providers قابل للنقر
+  • الدليل يظهر بشكل ممتاز على الموبايل (390x844) والديسكتوب
+- اختبار الـ lint: نجح بدون أخطاء
+- لا توجد أخطاء runtime في console
+
+Stage Summary:
+- التطبيق الآن يعرض رسائل خطأ عربية واضحة بدلاً من الرسائل التقنية الإنجليزية
+- عند حدوث rate limit، يظهر دليل مرئي بخمس خطوات لإيقاف تأكيد البريد في Supabase
+- المستخدم يحتاج فقط إلى:
+  1. فتح Supabase Dashboard → Auth Providers
+  2. الضغط على Email
+  3. إطفاء مفتاح Confirm email
+  4. الضغط على Save
+  5. العودة للتطبيق وإعادة محاولة التسجيل
+- لقطات الشاشة محفوظة في:
+  • /home/z/my-project/download/rate-limit-error.png (ديسكتوب)
+  • /home/z/my-project/download/rate-limit-error-mobile.png (موبايل)

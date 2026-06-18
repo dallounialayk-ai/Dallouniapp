@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase, type Profile, type UserRole } from '@/lib/supabase';
+import { translateAuthError } from '@/lib/auth-errors';
 
 type AuthState = {
   profile: Profile | null;
@@ -54,11 +55,22 @@ export const useAuth = create<AuthState>()(
           });
 
           if (error) {
-            set({ loading: false, error: error.message });
-            return { error: error.message };
+            const friendly = translateAuthError(error);
+            set({ loading: false, error: friendly });
+            return { error: friendly };
           }
 
-          if (signUpData.user) {
+          // حالة خاصة: تم إنشاء المستخدم لكنه يحتاج تأكيد بريد
+          // (يحدث عند تفعيل "Confirm email" في Supabase)
+          if (signUpData.user && !signUpData.session) {
+            set({ loading: false });
+            return {
+              error: 'needs_email_confirmation',
+              needsEmailConfirmation: true,
+            } as any;
+          }
+
+          if (signUpData.user && signUpData.session) {
             const updateData: Record<string, any> = {};
             if (data.bio) updateData.bio = data.bio;
             if (data.serviceCategory) updateData.service_category = data.serviceCategory;
@@ -86,8 +98,9 @@ export const useAuth = create<AuthState>()(
           set({ loading: false });
           return { error: null };
         } catch (e: any) {
-          set({ loading: false, error: e.message });
-          return { error: e.message };
+          const friendly = translateAuthError(e);
+          set({ loading: false, error: friendly });
+          return { error: friendly };
         }
       },
 
@@ -100,8 +113,9 @@ export const useAuth = create<AuthState>()(
           });
 
           if (error) {
-            set({ loading: false, error: error.message });
-            return { error: error.message };
+            const friendly = translateAuthError(error);
+            set({ loading: false, error: friendly });
+            return { error: friendly };
           }
 
           if (data.user) {
@@ -123,8 +137,9 @@ export const useAuth = create<AuthState>()(
           set({ loading: false });
           return { error: 'حدث خطأ غير معروف' };
         } catch (e: any) {
-          set({ loading: false, error: e.message });
-          return { error: e.message };
+          const friendly = translateAuthError(e);
+          set({ loading: false, error: friendly });
+          return { error: friendly };
         }
       },
 

@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, Wrench, User, Building2, ArrowRight, ArrowLeft,
   Phone, Mail, Lock, MapPin, UserCircle2, Briefcase,
-  Sparkles, Shield, CheckCircle2, ChevronDown,
+  Sparkles, Shield, CheckCircle2, ChevronDown, AlertTriangle,
+  Settings, ExternalLink, Info, X,
 } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { Button } from '@/components/ui/button';
@@ -216,12 +217,14 @@ function LoginForm({
   const { signIn, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorBanner(null);
     if (!email || !password) return;
     const { error } = await signIn(email, password);
-    if (error) toast.error(error);
+    if (error) setErrorBanner(error);
   };
 
   return (
@@ -231,6 +234,10 @@ function LoginForm({
       onBack={onBack}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {errorBanner && (
+          <ErrorBanner message={errorBanner} onClose={() => setErrorBanner(null)} />
+        )}
+
         <Field label="البريد الإلكتروني" icon={<Mail className="w-4 h-4" />}>
           <Input
             type="email"
@@ -289,18 +296,22 @@ function RegisterForm({
   const [password, setPassword] = useState('');
   const [serviceCategory, setServiceCategory] = useState('');
   const [bio, setBio] = useState('');
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorBanner(null);
+    setNeedsEmailConfirmation(false);
     if (!fullName || !phone || !email || !governorate || !password) {
-      toast.error('الرجاء إكمال جميع الحقول المطلوبة');
+      setErrorBanner('الرجاء إكمال جميع الحقول المطلوبة');
       return;
     }
     if (role === 'provider' && !serviceCategory) {
-      toast.error('الرجاء اختيار نوع الخدمة');
+      setErrorBanner('الرجاء اختيار نوع الخدمة');
       return;
     }
-    const { error } = await signUp({
+    const result = await signUp({
       email,
       password,
       fullName,
@@ -310,7 +321,13 @@ function RegisterForm({
       bio: role === 'provider' ? bio : undefined,
       serviceCategory: role === 'provider' ? serviceCategory : undefined,
     });
-    if (error) toast.error(error);
+    if (result.error) {
+      if ((result as any).needsEmailConfirmation) {
+        setNeedsEmailConfirmation(true);
+      } else {
+        setErrorBanner(result.error);
+      }
+    }
   };
 
   return (
@@ -329,6 +346,14 @@ function RegisterForm({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {errorBanner && (
+          <ErrorBanner message={errorBanner} onClose={() => setErrorBanner(null)} />
+        )}
+        {(needsEmailConfirmation ||
+          (errorBanner && (errorBanner.includes('rate limit') || errorBanner.includes('تجاوز')))) && (
+          <EmailConfirmationGuide />
+        )}
+
         <Field label="الاسم الثلاثي" icon={<UserCircle2 className="w-4 h-4" />}>
           <Input
             value={fullName}
@@ -506,5 +531,123 @@ function RoleTabButton({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * بانر خطأ متحرك مع إمكانية الإغلاق
+ */
+function ErrorBanner({
+  message, onClose,
+}: {
+  message: string;
+  onClose?: () => void;
+}) {
+  // كشف أخطاء rate limit لإضافة زر الدليل
+  const isRateLimit = message.includes('rate limit') || message.includes('تجاوز');
+  const isNeedsConfirm = message.includes('تأكيد') || message.includes('بريد');
+  const isCritical = isRateLimit || isNeedsConfirm;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8, height: 0 }}
+      animate={{ opacity: 1, y: 0, height: 'auto' }}
+      exit={{ opacity: 0, y: -8, height: 0 }}
+      className={`rounded-xl border p-3 text-xs leading-relaxed ${
+        isCritical
+          ? 'bg-amber-50 border-amber-200 text-amber-900'
+          : 'bg-destructive/5 border-destructive/20 text-destructive'
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <AlertTriangle
+          className={`w-4 h-4 shrink-0 mt-0.5 ${
+            isCritical ? 'text-amber-600' : 'text-destructive'
+          }`}
+        />
+        <div className="flex-1 whitespace-pre-line">{message}</div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="shrink-0 text-current opacity-50 hover:opacity-100"
+            aria-label="إغلاق"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+/**
+ * دليل إيقاف تأكيد البريد في Supabase
+ * يظهر عند خطأ rate limit أو عند الحاجة لتأكيد البريد
+ */
+function EmailConfirmationGuide() {
+  const [open, setOpen] = useState(true);
+  if (!open) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs"
+    >
+      <div className="flex items-start gap-2">
+        <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <div className="font-bold text-amber-900 mb-1.5">
+            لإكمال التسجيل: أوقف تأكيد البريد في Supabase
+          </div>
+          <p className="text-amber-800 leading-relaxed mb-2.5">
+            Supabase يطلب من المستخدمين تأكيد بريدهم قبل الدخول، لكن هذا يسبب خطأ
+            <span className="font-mono bg-amber-100 px-1 rounded mx-1">rate limit</span>
+            عند محاولات متعددة. أوقف هذا الخيار لتسجيل دخول فوري بدون بريد تأكيد:
+          </p>
+
+          <ol className="space-y-1.5 text-amber-900 mb-3">
+            <GuideStep n={1}>
+              افتح لوحة تحكم Supabase →{' '}
+              <a
+                href="https://supabase.com/dashboard/project/mfogdjxvtpvuvxzyyjqn/auth/providers"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-amber-700 underline underline-offset-2 inline-flex items-center gap-0.5"
+              >
+                Auth Providers
+                <ExternalLink className="w-3 h-3 inline" />
+              </a>
+            </GuideStep>
+            <GuideStep n={2}>اضغط على <b>Email</b> في القائمة</GuideStep>
+            <GuideStep n={3}>
+              أطفئ المفتاح <b>Confirm email</b> (اجعله معطّلًا)
+            </GuideStep>
+            <GuideStep n={4}>اضغط <b>Save</b></GuideStep>
+            <GuideStep n={5}>
+              عُد هنا واضغط <b>إنشاء الحساب</b> مجددًا — سيعمل فورًا ✅
+            </GuideStep>
+          </ol>
+
+          <button
+            onClick={() => setOpen(false)}
+            className="text-amber-700 hover:text-amber-900 text-[11px] underline"
+          >
+            إخفاء هذا الدليل
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function GuideStep({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <li className="flex items-start gap-2">
+      <span className="shrink-0 w-5 h-5 rounded-full bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center mt-0.5">
+        {n}
+      </span>
+      <span className="flex-1">{children}</span>
+    </li>
   );
 }
