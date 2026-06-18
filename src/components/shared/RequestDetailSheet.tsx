@@ -17,7 +17,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { supabase, type ServiceRequest, type Profile, type Offer } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
@@ -200,7 +199,7 @@ export function RequestDetailSheet({
             <SheetDescription className="sr-only">عرض تفاصيل الطلب</SheetDescription>
           </SheetHeader>
 
-          <ScrollArea className="flex-1">
+          <div className="flex-1 overflow-y-auto scrollbar-overlay min-h-0">
             <div className="p-5 space-y-5">
               {/* Title and meta */}
               <div>
@@ -341,7 +340,7 @@ export function RequestDetailSheet({
                 )}
               </div>
             </div>
-          </ScrollArea>
+          </div>
         </SheetContent>
       </Sheet>
 

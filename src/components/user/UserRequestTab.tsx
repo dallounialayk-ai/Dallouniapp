@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { supabase, type ServiceRequest } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
@@ -128,7 +127,7 @@ export function UserRequestTab({
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
         <div className="p-4 pb-8">
           {showList ? (
             <div className="space-y-3">
@@ -271,7 +270,7 @@ export function UserRequestTab({
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }

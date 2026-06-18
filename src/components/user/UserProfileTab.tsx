@@ -18,7 +18,6 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase, type Profile, type ServiceRequest, type Offer, type Message } from '@/lib/supabase';
@@ -183,7 +182,7 @@ export function UserProfileTab({
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
         <div className="p-4 pb-8 space-y-4">
           {/* Profile card */}
           <div className="bg-card rounded-2xl p-5 border border-border/60 elevate-1">
@@ -471,7 +470,7 @@ export function UserProfileTab({
             {APP_NAME} • الإصدار 1.0
           </div>
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Sign-out confirmation dialog */}
       <Dialog open={signOutOpen} onOpenChange={setSignOutOpen}>

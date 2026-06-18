@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase, type Profile, type Review } from '@/lib/supabase';
 import { SERVICE_CATEGORIES, getCategoryName } from '@/lib/constants';
@@ -194,7 +193,7 @@ export function UserHomeTab({
       </div>
 
       {/* List */}
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
         <div className="p-4 space-y-3 pb-8">
           {loading ? (
             <LoadingList />
@@ -224,7 +223,7 @@ export function UserHomeTab({
             </>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }

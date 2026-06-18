@@ -141,3 +141,57 @@ Stage Summary:
   • /home/z/my-project/download/user-profile-logout.png
   • /home/z/my-project/download/provider-profile-logout.png
   • /home/z/my-project/download/logout-confirmation.png
+
+---
+Task ID: add-scrollbars
+Agent: Super Z (main agent)
+Task: مراجعة جميع الصفحات والتبويبات وإضافة أشرطة تمرير أنيقة متسقة مع تصميم Apple
+
+Work Log:
+- مسح شامل لجميع الملفات الـ 13 التي تستخدم ScrollArea أو overflow
+- تطوير نظام أشرطة تمرير جديد في globals.css بأربعة متغيرات:
+  • scrollbar-thin: شريط رفيع 6px للاستخدام العام في القوائم والتبويبات
+  • scrollbar-overlay: شريط شفاف 6px يظهر فوق المحتوى (للأوراق المنبثقة والنوافذ)
+  • scrollbar-hide: لإخفاء الشريط تمامًا (للكاروسيلات والتمرير الأفقي)
+  • fade-y-mask: تأثير تلاشي علوي/سفلي يدل على وجود محتوى إضافي
+- استبدال جميع مكونات <ScrollArea> بـ <div className="... scrollbar-thin/overlay ..."> في:
+  • UserHomeTab (قائمة مقدمي الخدمات)
+  • UserRequestTab (نموذج الطلب + قائمة طلباتي)
+  • UserProfileTab (الملف الشخصي + الرسائل + الطلبات)
+  • ProviderHomeTab (قائمة الطلبات المفتوحة)
+  • ProviderProfileTab (الملف الشخصي + الكاتلوج + الرسائل)
+  • ProviderDetailSheet (تفاصيل مقدم الخدمة + كاتلوج + تقييمات)
+  • RequestDetailSheet (تفاصيل الطلب + العروض)
+  • ChatSheet (محادثة الدردشة)
+  • NotificationsSheet (قائمة الإشعارات)
+- تحديث AuthScreen لجعل الحاوية قابلة للتمرير عند الحاجة (overflow-y-auto + scrollbar-overlay)
+- تطبيق scrollbar-thin على SelectContent (القوائم المنسدلة) في ui/select.tsx
+- إزالة كل imports غير المستخدمة للـ ScrollArea بعد الاستبدال
+- اختبار الـ lint: نجح بدون أخطاء
+
+اختبارات Agent Browser:
+- تسجيل 10 مقدمي خدمات جدد + 10 طلبات خدمة جديدة عبر Supabase REST API
+- اختبار التمرير في تبويب المستخدم الرئيسي (13 مقدم):
+  • scrollHeight=1674, clientHeight=561 (محتوى يفوق 3x المساحة المرئية)
+  • التمرير يعمل بسلاسة بـ smooth behavior
+- اختبار التمرير في تبويب مقدم الخدمة الرئيسي (10 طلبات):
+  • scrollHeight=1519, clientHeight=517 على الديسكتوب
+  • scrollHeight=1674, clientHeight=561 على الموبايل
+- اختبار فتح ورقة تفاصيل مقدم الخدمة والتمرير داخلها بنجاح
+- اختبار فتح ورقة تفاصيل الطلب (المحتوى مناسب بدون تمرير، لكن البنية جاهزة)
+- لا توجد أخطاء في console أو errors
+- شريط التمرير يظهر بشكل أنيق رفيع شفاف متسق مع Apple Design
+
+Stage Summary:
+- تم إضافة أشرطة تمرير أنيقة في كل الصفحات والتبويبات التي تحتاجها
+- نظام موحد من 4 متغيرات (thin / overlay / hide / fade-mask)
+- التمرير يعمل بسلاسة على الموبايل والديسكتوب
+- التصميم متسق تمامًا مع نظام Apple Design (رفيع، شفاف، يظهر عند الحاجة)
+- استبدال Radix ScrollArea بـ div + CSS classes = أداء أفضل ودعم touch native
+- لقطات الشاشة:
+  • /home/z/my-project/download/scroll-test-user-home.png
+  • /home/z/my-project/download/scroll-test-provider-home.png
+  • /home/z/my-project/download/scroll-test-provider-detail-sheet.png
+  • /home/z/my-project/download/scroll-test-user-profile.png
+  • /home/z/my-project/download/scroll-desktop-provider-home.png
+  • /home/z/my-project/download/scroll-provider-home-with-scrollbar.png

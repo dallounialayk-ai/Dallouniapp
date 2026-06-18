@@ -6,7 +6,6 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { supabase, type AppNotification } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
@@ -123,7 +122,7 @@ export function NotificationsSheet({
           </div>
         )}
 
-        <ScrollArea className="flex-1">
+        <div className="flex-1 overflow-y-auto scrollbar-overlay min-h-0">
           <div className="p-4 space-y-2 pb-8">
             {loading ? (
               <p className="text-center text-sm text-muted-foreground py-8">جاري التحميل…</p>
@@ -139,7 +138,7 @@ export function NotificationsSheet({
               notifications.map((n) => <NotifRow key={n.id} notif={n} />)
             )}
           </div>
-        </ScrollArea>
+        </div>
       </SheetContent>
     </Sheet>
   );

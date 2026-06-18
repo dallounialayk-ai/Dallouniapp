@@ -10,7 +10,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { supabase, type Profile, type Message } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
@@ -158,8 +157,8 @@ export function ChatSheet({
           </div>
         </SheetHeader>
 
-        <ScrollArea className="flex-1">
-          <div ref={scrollRef} className="p-4 space-y-2 min-h-full">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-overlay min-h-0">
+          <div className="p-4 space-y-2 min-h-full">
             {loading && messages.length === 0 ? (
               <div className="text-center text-sm text-muted-foreground py-12">
                 جاري تحميل الرسائل…
@@ -200,7 +199,7 @@ export function ChatSheet({
             )}
             <div ref={bottomRef} />
           </div>
-        </ScrollArea>
+        </div>
 
         <div className="p-3 border-t border-border/40 shrink-0">
           <div className="flex items-center gap-2">
