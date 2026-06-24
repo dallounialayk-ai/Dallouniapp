@@ -226,19 +226,6 @@ export function ProviderProfileTab({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 pt-3 pb-2 shrink-0 flex items-center justify-between gap-2">
-        <h2 className="text-base font-bold">الملف الشخصي</h2>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setSignOutOpen(true)}
-          className="h-9 rounded-xl text-xs text-destructive hover:text-destructive hover:bg-destructive/5 border-destructive/20 font-medium"
-        >
-          <LogOut className="w-3.5 h-3.5 ml-1.5" />
-          خروج
-        </Button>
-      </div>
-
       <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
         <div className="p-4 pb-8 space-y-4">
           {/* Profile card */}
