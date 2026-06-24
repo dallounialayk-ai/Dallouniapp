@@ -302,3 +302,136 @@ button:active, a:active, [role="button"]:active {
   from { opacity: 0; transform: translateY(100%); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ===========================================
+   MobileShell — إطار التطبيق بحجم الموبايل
+   - يملأ الشاشة بالكامل على الموبايل
+   - يعرض التطبيق في إطار مركزي على الشاشات الكبيرة
+   =========================================== */
+
+.mobile-shell-root {
+  /* على الموبايل: يملأ الشاشة بالكامل */
+  width: 100vw;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--background);
+
+  /* safe area insets للآيفون (notch, dynamic island, home indicator) */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+
+  /* على الشاشات الكبيرة: خلفية رمادية ومحاكاة موبايل */
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.mobile-shell-frame {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--background);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* على الشاشات الأكبر من موبايل (أكثر من 480px): عرض كإطار موبايل */
+@media (min-width: 481px) {
+  .mobile-shell-root {
+    background: linear-gradient(135deg, oklch(0.94 0.01 250), oklch(0.97 0.005 240));
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 12px;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  .mobile-shell-frame {
+    width: 390px;
+    max-width: 100%;
+    min-height: min(844px, calc(100vh - 48px));
+    min-height: min(844px, calc(100dvh - 48px));
+    height: min(844px, calc(100vh - 48px));
+    height: min(844px, calc(100dvh - 48px));
+    border-radius: 36px;
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.04),
+      0 12px 32px -4px rgba(0, 0, 0, 0.08),
+      0 32px 64px -12px rgba(0, 0, 0, 0.12),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+  }
+}
+
+/* على الشاشات الأكبر من 768px (تابلت): إطار أكبر قليلًا */
+@media (min-width: 769px) {
+  .mobile-shell-root {
+    padding: 32px 16px;
+  }
+  .mobile-shell-frame {
+    width: 430px;
+    height: min(932px, calc(100dvh - 64px));
+    min-height: min(932px, calc(100dvh - 64px));
+    border-radius: 44px;
+  }
+}
+
+/* ===========================================
+   Safe area helpers — للأجهزة ذات الـ notch
+   =========================================== */
+.safe-top {
+  padding-top: env(safe-area-inset-top) !important;
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom) !important;
+}
+.safe-x {
+  padding-left: env(safe-area-inset-left) !important;
+  padding-right: env(safe-area-inset-right) !important;
+}
+
+/* ارتفاع موبايل حقيقي مع دعم dvh */
+.h-mobile {
+  height: 100vh;
+  height: 100dvh;
+}
+.min-h-mobile {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* منع التكبير بالضغط المزدوج على iOS */
+input, select, textarea {
+  font-size: 16px;
+}
+@media (min-width: 481px) {
+  /* على إطار الموبايل في الديسكتوب، يمكن تصغير الخط قليلًا */
+  input, select, textarea {
+    font-size: 15px;
+  }
+}
+
+/* منع تحديد النص (محاكاة تطبيق native) */
+button, [role="button"], nav, header, .no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* السماح بتحديد النص في الحقول والنصوص القابلة للنسخ */
+input, textarea, [contenteditable], p, h1, h2, h3, h4, span, div {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* تحسين الـ tap target للأزرار على الموبايل (44px minimum) */
+button, [role="button"], a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+

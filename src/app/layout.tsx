@@ -66,7 +66,7 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <body
-        className={`${cairo.variable} ${tajawal.variable} font-sans antialiased bg-background text-foreground min-h-screen`}
+        className={`${cairo.variable} ${tajawal.variable} font-sans antialiased bg-background text-foreground overflow-hidden`}
       >
         {children}
         <Toaster />

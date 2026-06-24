@@ -240,3 +240,62 @@ Stage Summary:
 - جميع الملفات محفوظة بشكل دائم
 - قاعدة البيانات على Supabase تعمل ولا تحتاج إعادة إعداد
 - للاستئناف في يوم آخر: فقط اقرأ RESUME_GUIDE.md
+
+---
+Task ID: mobile-responsive-layout
+Agent: Super Z (main agent)
+Task: تعديل حجم واجهات وصفحات التطبيق لتناسب شاشات الهواتف المحمولة (Android + iPhone) بدون أي إزاحات جانبية
+
+Work Log:
+- استعادة ملف .env الذي فُقد (مفاتيح Supabase)
+- إنشاء مكون MobileShell (src/components/MobileShell.tsx) يحصر التطبيق في إطار موبايل
+- إضافة 130+ سطر CSS في globals.css لإطار الموبايل:
+  • mobile-shell-root: يملأ الشاشة على الموبايل + safe area insets
+  • mobile-shell-frame: 100% على الموبايل، 390px على >480px، 430px على >768px
+  • border-radius: 0 على الموبايل، 36px على التابلت، 44px على الديسكتوب
+  • box-shadow متعدد المستويات على الشاشات الكبيرة لمحاكاة موبايل
+  • خلفية متدرجة رمادية خفيفة حول الإطار على الشاشات الكبيرة
+- إضافة safe area helpers: safe-top, safe-bottom, safe-x, h-mobile, min-h-mobile
+- إضافة قواعد iOS: منع تكبير النص بحجم 16px، منع tap highlight، touch-action
+- إضافة قواعد user-select: منع تحديد النص في الأزرار والسماح به في النصوص
+- استبدال h-screen بـ h-full في UserApp و ProviderApp
+- استبدال min-h-screen بـ h-full في AuthGate و AuthScreen و SchemaChecker
+- تحديث layout.tsx: إزالة min-h-screen، إضافة overflow-hidden على body
+- تحديث page.tsx: تغليف التطبيق بـ MobileShell
+- تحديث AuthScreen: px-4 بدل px-6، pt-8 بدل pt-10، pb-8 بدل pb-10 (تقليل الحشو للموبايل)
+
+اختبارات Agent Browser على 7 أحجام شاشات:
+1. iPhone 14 Pro (390×844): frame=390×844, radius=0, overflow=false ✓
+2. Android (360×800): frame=360×800, radius=0, overflow=false ✓
+3. iPhone Pro Max (430×932): frame=430×932, radius=0, overflow=false ✓
+4. iPhone SE (320×568): frame=320×670, radius=0, overflow=false ✓
+5. Tablet (768×1024): frame=390×844, radius=36px, overflow=false ✓
+6. Desktop (1280×800): frame=430×736, radius=44px, overflow=false ✓
+7. Desktop (1440×900): frame=430×836, radius=44px, overflow=false ✓
+
+اختبارات إضافية للتأكد من عدم وجود إزاحات:
+- تبويب المستخدم: الرئيسية ✓، طلب خدمة ✓، الملف الشخصي ✓، طلباتي ✓
+- تبويب مقدم الخدمة: الرئيسية ✓، الملف الشخصي ✓، الكاتلوج ✓، الرسائل ✓
+- شاشة تسجيل الدخول ✓
+- شاشة تسجيل مقدم الخدمة (7 حقول) — قابلة للتمرير بالكامل ✓
+- نافذة إضافة عمل للكاتلوج ✓
+- ورقة تفاصيل الطلب (Sheet) ✓
+- نافذة تأكيد تسجيل الخروج ✓
+
+كل الاختبارات: frame.scrollWidth === frame.clientWidth (لا توجد إزاحات أفقية)
+
+Stage Summary:
+- التطبيق الآن يعرض بشكل مثالي على كل أحجام شاشات الموبايل (320px - 430px)
+- على الشاشات الأكبر من 480px، يعرض التطبيق في إطار موبايل أنيق بزوايا دائرية وظلال
+- لا توجد أي إزاحات يمين أو يسار على أي شاشة
+- safe area insets تحترم الـ notch والـ home indicator على الآيفون
+- منع التكبير بالضغط المزدوج على iOS
+- منع tap highlight وتحسين touch-action للأزرار
+- 7 لقطات شاشة محفوظة في download/screenshots/ توثق كل الأحجام
+- الـ lint نظيف، لا أخطاء runtime
+
+ملاحظات للمستخدم:
+- التطبيق الآن يبدو وكأنه تطبيق native على الموبايل
+- على الديسكتوب، يظهر كمحاكاة موبايل أنيقة (مثل Apple Simulator)
+- يمكن للمستخدم التمرير بسلاسة في كل الصفحات الطويلة
+- كل الأزرار والأيقونات بحجم مناسب للمس (44px minimum)

@@ -37,7 +37,7 @@ export function ProviderApp() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-full bg-background">
       <header className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40">
         <div>
           <div className="text-[10px] text-muted-foreground">دلّوني عليك</div>

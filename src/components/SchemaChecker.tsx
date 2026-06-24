@@ -34,7 +34,7 @@ export function SchemaChecker({ children }: { children: React.ReactNode }) {
 
   if (status === 'checking') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="h-full flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -299,7 +299,7 @@ function SetupWizard({ onRetry }: { onRetry: () => void }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/[0.04] flex items-center justify-center p-4 py-8">
+    <div className="h-full overflow-y-auto scrollbar-overlay bg-gradient-to-br from-background via-background to-primary/[0.04] flex items-center justify-center p-4 py-6">
       <div className="w-full max-w-2xl">
         <div className="glass-card rounded-3xl p-6 sm:p-8">
           {/* Header */}

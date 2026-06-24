@@ -2,6 +2,7 @@
 
 import { AuthGate } from '@/components/AuthGate';
 import { SchemaChecker } from '@/components/SchemaChecker';
+import { MobileShell } from '@/components/MobileShell';
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import { UserApp } from '@/components/user/UserApp';
 import { ProviderApp } from '@/components/provider/ProviderApp';
@@ -9,11 +10,13 @@ import { useAuth } from '@/store/auth';
 
 export default function Home() {
   return (
-    <AuthGate>
-      <SchemaChecker>
-        <Root />
-      </SchemaChecker>
-    </AuthGate>
+    <MobileShell>
+      <AuthGate>
+        <SchemaChecker>
+          <Root />
+        </SchemaChecker>
+      </AuthGate>
+    </MobileShell>
   );
 }
 

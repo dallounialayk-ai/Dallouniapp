@@ -29,18 +29,18 @@ export function AuthScreen() {
   const [pendingRole, setPendingRole] = useState<RegisterRole>('user');
 
   return (
-    <div className="min-h-screen relative overflow-y-auto scrollbar-overlay bg-gradient-to-br from-background via-background to-primary/[0.04]">
+    <div className="h-full relative overflow-y-auto scrollbar-overlay bg-gradient-to-br from-background via-background to-primary/[0.04]">
       {/* Decorative blurs */}
       <div className="pointer-events-none absolute -top-32 -right-32 w-96 h-96 rounded-full bg-primary/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-accent/40 blur-3xl" />
 
-      <div className="relative z-10 min-h-screen flex flex-col">
+      <div className="relative z-10 min-h-full flex flex-col">
         {/* Brand */}
-        <header className="px-6 pt-10 pb-4 flex items-center justify-center">
+        <header className="px-6 pt-8 pb-4 flex items-center justify-center">
           <BrandMark />
         </header>
 
-        <main className="flex-1 flex items-start sm:items-center justify-center px-6 pb-10 pt-2">
+        <main className="flex-1 flex items-start sm:items-center justify-center px-4 pb-8 pt-2">
           <AnimatePresence mode="wait">
             {mode === 'select' && (
               <motion.div
