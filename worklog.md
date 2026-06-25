@@ -431,3 +431,69 @@ Work Log:
 - materials-item-detail.png (نافذة تفاصيل صنف مع السعر)
 - materials-provider-catalog-with-prices.png (ملف المزود الشخصي مع 4 أصناف)
 - electricity-provider-no-prices.png (مزود كهرباء بدون أسعار — للتحقق)
+
+---
+Task ID: pre-deployment-verification
+Agent: Super Z (main agent)
+Task: فحص شامل قبل النشر والتحقق من جميع الوظائف
+
+Work Log:
+- فحص سجل التطوير: نظيف (أخطاء supabaseUrl السابقة تم إصلاحها)
+- فحص ESLint: نظيف تمامًا (0 أخطاء)
+- فحص TypeScript: أخطاء فقط في examples/ و skills/ (ملفات خارج المشروع)
+- فحص إعدادات النشر:
+  • Caddyfile: مضبوط (port 81 + XTransformPort support)
+  • next.config.ts: output="standalone" + reactStrictMode=false
+  • package.json: scripts كاملة (dev, build, start, lint)
+- بناء تجريبي ناجح:
+  • Compiled successfully in 12.3s
+  • تم توليد جميع الصفحات الثابتة
+  • standalone server.js موجود
+  • static + public files منسوخة
+  • .env منسوخ لـ standalone
+- فحص قاعدة البيانات:
+  • اتصال Supabase يعمل (HTTP 200)
+  • أعمدة price و unit موجودة في catalog_items
+- اختبارات شاملة في المتصفح (11 اختبار):
+  1. شاشة الاختيار (Auth) ✓
+  2. تبويب الرئيسية - البحث والفلترة ✓
+  3. فتح تفاصيل مزود الخدمة ✓
+  4. تبويب طلب خدمة ✓
+  5. تبويب الملف الشخصي ✓
+  6. فتح محادثة شات (15 رسالة) ✓
+  7. الإشعارات ✓
+  8. تبويب الرئيسية لمزود الخدمة ✓
+  9. ملف مزود مواد البناء (4 أصناف بأسعارها) ✓
+  10. تبويب الملف الشخصي لمزود الخدمة ✓
+  11. تسجيل الخروج ✓
+- فحص الأداء:
+  • تحميل DOM: 104ms (ممتاز)
+  • تحميل كامل: 417ms (ممتاز)
+  • حجم النقل: 8KB (ممتاز)
+  • استجابة Supabase: 260ms (سريع)
+- فحص console: لا أخطاء
+- فحص errors: لا أخطاء
+- اختبار خادم الإنتاج: استجاب برمز HTTP 200
+
+إنشاء سكريبت فحص آلي:
+- scripts/pre-deploy-check.sh: يتحقق من جميع الجوانب قبل النشر
+- تشغيله: bash scripts/pre-deploy-check.sh
+- جميع الفحوصات نجحت ✅
+
+النتائج النهائية:
+✅ الكود نظيف (ESLint + TypeScript)
+✅ البناء ناجح (standalone output)
+✅ قاعدة البيانات متصلة وتعمل
+✅ جميع الوظائف تعمل بشكل صحيح
+✅ الأداء ممتاز
+✅ لا أخطاء runtime
+✅ التطبيق جاهز للنشر
+
+لقطات الشاشة (7 لقطات للاختبارات):
+- pre-deploy-test-1-provider-detail.png
+- pre-deploy-test-2-request-tab.png
+- pre-deploy-test-3-profile.png
+- pre-deploy-test-4-chat.png
+- pre-deploy-test-5-notifications.png
+- pre-deploy-test-6-provider-home.png
+- pre-deploy-test-7-materials-profile.png
