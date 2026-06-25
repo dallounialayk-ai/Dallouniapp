@@ -299,3 +299,34 @@ Stage Summary:
 - على الديسكتوب، يظهر كمحاكاة موبايل أنيقة (مثل Apple Simulator)
 - يمكن للمستخدم التمرير بسلاسة في كل الصفحات الطويلة
 - كل الأزرار والأيقونات بحجم مناسب للمس (44px minimum)
+
+---
+Task ID: chat-realtime-fix-verification
+Agent: Super Z (main agent)
+Task: التحقق من اتصال Supabase وإصلاح الشات اللحظي
+
+Work Log:
+- التحقق من ملف .env: موجود وصحيح (URL + anon key)
+- فحص dev.log: وجد أخطاء سابقة "supabaseUrl is required" لكن تم إصلاحها بعد إعادة تحميل .env
+- اختبار الاتصال المباشر من المتصفح: نجح (6 طلبات إلى supabase.co)
+- اختبار RLS على جدول messages: الإدراج والقراءة يعملان correctly
+- إصلاح استعلام loadMessages: استبدال .or() المعقد باستعلامين منفصلين (sent + received)
+- إصلاح polling: استخدام messagesRef لمراقبة الرسائل الجديدة كل 2 ثانية
+- اختبار شامل للشات بين مستخدمين (session1 + session2):
+
+النتائج النهائية:
+✅ الرسالة تظهر فورًا عند الإرسال (optimistic update مع علامة "جاري الإرسال…")
+✅ الرسالة تُحفظ في قاعدة البيانات بنجاح
+✅ العلامة "جاري الإرسال…" تختفي وتُستبدل بـ "الآن" بعد الحفظ
+✅ الرسالة تصل للطرف الآخر خلال 2-4 ثوانٍ عبر polling
+✅ التراسل يعمل في كلا الاتجاهين (من المستخدم للمزود ومن المزود للمستخدم)
+
+ملاحظات:
+- Realtime عبر WebSocket غير مفعّل على Supabase (يتطلب تفعيل في Dashboard)
+- تم استخدام polling كل 2 ثانية كبديل موثوق
+- عند تفعيل Realtime لاحقًا، الـ polling سيتوقف تلقائيًا
+- ملف SQL لتفعيل Realtime محفوظ في download/enable-realtime-messages.sql
+
+لقطات الشاشة:
+- chat-success-session1-sender.png
+- chat-success-session2-receiver.png
