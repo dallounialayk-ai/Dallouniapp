@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   LogOut, Camera, Mail, Phone, MapPin, Edit3, X, Check,
   MessageCircle, Image as ImageIcon, Plus, Trash2, Briefcase,
-  Sparkles, Bell, AlertTriangle,
+  Sparkles, Bell, AlertTriangle, Package, Tag,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -23,8 +23,11 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase, type Profile, type CatalogItem, type Message } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
-import { SERVICE_CATEGORIES, YEMEN_GOVERNORATES, getCategoryName, APP_NAME } from '@/lib/constants';
-import { getInitials, formatRelativeTime } from '@/lib/utils';
+import {
+  SERVICE_CATEGORIES, YEMEN_GOVERNORATES, getCategoryName, APP_NAME,
+  PRODUCT_UNITS, isBuildingMaterialsProvider,
+} from '@/lib/constants';
+import { getInitials, formatRelativeTime, formatCurrency } from '@/lib/utils';
 
 type Conversation = {
   peer: Profile;
@@ -54,6 +57,8 @@ export function ProviderProfileTab({
   const [newCatalogTitle, setNewCatalogTitle] = useState('');
   const [newCatalogDesc, setNewCatalogDesc] = useState('');
   const [newCatalogImage, setNewCatalogImage] = useState('');
+  const [newCatalogPrice, setNewCatalogPrice] = useState('');
+  const [newCatalogUnit, setNewCatalogUnit] = useState('');
   const [uploadingCatalog, setUploadingCatalog] = useState(false);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -112,6 +117,9 @@ export function ProviderProfileTab({
   }, [loadCatalog, loadConversations]);
 
   if (!profile) return null;
+
+  // تحديد إذا كان مقدم الخدمة يبيع مواد بناء (منتجات بأسعار) أو خدمات/أعمال
+  const isMaterialsProvider = isBuildingMaterialsProvider(profile.service_category);
 
   const handleSaveProfile = async () => {
     if (!serviceCategory) {
@@ -172,33 +180,70 @@ export function ProviderProfileTab({
   const handleAddCatalog = async () => {
     if (!profile) return;
     if (!newCatalogTitle.trim()) {
-      toast.error('الرجاء إدخال عنوان للعمل');
+      toast.error(isMaterialsProvider ? 'الرجاء إدخال اسم الصنف' : 'الرجاء إدخال عنوان للعمل');
       return;
     }
     if (!newCatalogImage) {
-      toast.error('الرجاء إضافة صورة للعمل');
+      toast.error(isMaterialsProvider ? 'الرجاء إضافة صورة للصنف' : 'الرجاء إضافة صورة للعمل');
       return;
     }
-    const { data, error } = await supabase
+    if (isMaterialsProvider && !newCatalogPrice.trim()) {
+      toast.error('الرجاء إدخال سعر الوحدة');
+      return;
+    }
+    const insertData: Record<string, any> = {
+      provider_id: profile.id,
+      title: newCatalogTitle.trim(),
+      description: newCatalogDesc.trim() || null,
+      image_url: newCatalogImage,
+    };
+    // إضافة السعر والوحدة فقط لمواد البناء
+    if (isMaterialsProvider) {
+      insertData.price = parseFloat(newCatalogPrice) || null;
+      insertData.unit = newCatalogUnit || null;
+    }
+    let { data, error } = await supabase
       .from('catalog_items')
-      .insert({
-        provider_id: profile.id,
-        title: newCatalogTitle.trim(),
-        description: newCatalogDesc.trim(),
-        image_url: newCatalogImage,
-      })
+      .insert(insertData)
       .select('*')
       .single();
-    if (error) {
+
+    // إذا فشل الإدراج بسبب عدم وجود عمود price/unit (لم يُطبّق SQL بعد)
+    // أعد المحاولة بدون price و unit
+    if (error && isMaterialsProvider && error.message.includes('column')) {
+      const fallbackData: Record<string, any> = {
+        provider_id: profile.id,
+        title: newCatalogTitle.trim(),
+        description: `${newCatalogDesc.trim() || ''}\n\nالسعر: ${formatCurrency(parseFloat(newCatalogPrice))}${newCatalogUnit ? ' / ' + newCatalogUnit : ''}`.trim(),
+        image_url: newCatalogImage,
+      };
+      const fallback = await supabase
+        .from('catalog_items')
+        .insert(fallbackData)
+        .select('*')
+        .single();
+      data = fallback.data;
+      error = fallback.error;
+      if (fallback.error) {
+        toast.error('لتسجيل الأسعار بشكل صحيح، الرجاء تطبيق ملف add-price-column.sql في Supabase SQL Editor. meanwhile تم حفظ الصنف مع السعر في الوصف.');
+      } else {
+        toast.success('تمت إضافة الصنف (السعر محفوظ في الوصف مؤقتًا)');
+      }
+    } else if (error) {
       toast.error(error.message);
       return;
+    } else {
+      toast.success(isMaterialsProvider ? 'تمت إضافة الصنف للكاتلوج' : 'تمت إضافة العمل للكاتلوج');
     }
-    setCatalog((prev) => [data as CatalogItem, ...prev]);
-    toast.success('تمت إضافة العمل للكاتلوج');
+    if (data) {
+      setCatalog((prev) => [data as CatalogItem, ...prev]);
+    }
     setCatalogDialogOpen(false);
     setNewCatalogTitle('');
     setNewCatalogDesc('');
     setNewCatalogImage('');
+    setNewCatalogPrice('');
+    setNewCatalogUnit('');
   };
 
   const handleDeleteCatalog = async (id: string) => {
@@ -385,8 +430,12 @@ export function ProviderProfileTab({
           <Tabs defaultValue="catalog" className="w-full">
             <TabsList className="w-full h-10 rounded-xl bg-muted/50 p-1">
               <TabsTrigger value="catalog" className="rounded-lg text-xs">
-                <ImageIcon className="w-3.5 h-3.5 ml-1.5" />
-                الكاتلوج
+                {isMaterialsProvider ? (
+                  <Package className="w-3.5 h-3.5 ml-1.5" />
+                ) : (
+                  <ImageIcon className="w-3.5 h-3.5 ml-1.5" />
+                )}
+                {isMaterialsProvider ? 'الأصناف' : 'الكاتلوج'}
                 {catalog.length > 0 && (
                   <span className="bg-muted-foreground text-background text-[9px] rounded-full px-1.5 py-0.5 mr-1">
                     {catalog.length}
@@ -409,16 +458,35 @@ export function ProviderProfileTab({
                 onClick={() => setCatalogDialogOpen(true)}
                 className="w-full h-10 rounded-xl mb-3"
               >
-                <Plus className="w-4 h-4 ml-1.5" />
-                إضافة عمل جديد
+                {isMaterialsProvider ? (
+                  <>
+                    <Package className="w-4 h-4 ml-1.5" />
+                    إضافة صنف جديد
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 ml-1.5" />
+                    إضافة عمل جديد
+                  </>
+                )}
               </Button>
               {catalog.length === 0 ? (
                 <div className="text-center py-10">
                   <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto mb-2">
-                    <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                    {isMaterialsProvider ? (
+                      <Package className="w-6 h-6 text-muted-foreground" />
+                    ) : (
+                      <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                    )}
                   </div>
-                  <p className="text-sm font-medium">لا توجد أعمال بعد</p>
-                  <p className="text-xs text-muted-foreground mt-1">أضف صور أعمالك السابقة لكسب ثقة العملاء</p>
+                  <p className="text-sm font-medium">
+                    {isMaterialsProvider ? 'لا توجد أصناف بعد' : 'لا توجد أعمال بعد'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {isMaterialsProvider
+                      ? 'أضف أصناف مواد البناء وأسعارها لكسب ثقة العملاء'
+                      : 'أضف صور أعمالك السابقة لكسب ثقة العملاء'}
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
@@ -433,6 +501,12 @@ export function ProviderProfileTab({
                           alt={c.title}
                           className="w-full h-full object-cover"
                         />
+                        {isMaterialsProvider && c.price != null && (
+                          <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-[10px] font-bold rounded-full px-2 py-0.5 shadow-md">
+                            {formatCurrency(c.price)}
+                            {c.unit && <span className="font-normal opacity-90"> / {c.unit}</span>}
+                          </div>
+                        )}
                         <button
                           onClick={() => handleDeleteCatalog(c.id)}
                           className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -446,6 +520,17 @@ export function ProviderProfileTab({
                           <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">
                             {c.description}
                           </p>
+                        )}
+                        {isMaterialsProvider && c.price != null && (
+                          <div className="mt-1.5 flex items-center gap-1 text-primary font-bold text-xs">
+                            <Tag className="w-3 h-3" />
+                            {formatCurrency(c.price)}
+                            {c.unit && (
+                              <span className="text-muted-foreground font-normal text-[10px]">
+                                / {c.unit}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -565,11 +650,15 @@ export function ProviderProfileTab({
 
       {/* Catalog add dialog */}
       <Dialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen}>
-        <DialogContent className="rounded-3xl max-w-md">
+        <DialogContent className="rounded-3xl max-w-md max-h-[90vh] overflow-y-auto scrollbar-overlay">
           <DialogHeader>
-            <DialogTitle className="text-right">إضافة عمل للكاتلوج</DialogTitle>
+            <DialogTitle className="text-right">
+              {isMaterialsProvider ? 'إضافة صنف جديد' : 'إضافة عمل للكاتلوج'}
+            </DialogTitle>
             <DialogDescription className="text-right">
-              اعرض أعمالك السابقة لكسب ثقة العملاء
+              {isMaterialsProvider
+                ? 'أضف أصناف مواد البناء مع الأسعار لعرضها للعملاء'
+                : 'اعرض أعمالك السابقة لكسب ثقة العملاء'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -591,7 +680,9 @@ export function ProviderProfileTab({
                   ) : (
                     <div className="text-center">
                       <Camera className="w-7 h-7 mx-auto text-muted-foreground mb-1" />
-                      <p className="text-xs text-muted-foreground">اضغط لرفع صورة</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isMaterialsProvider ? 'اضغط لرفع صورة الصنف' : 'اضغط لرفع صورة'}
+                      </p>
                     </div>
                   )}
                   <input
@@ -607,22 +698,61 @@ export function ProviderProfileTab({
               )}
             </div>
             <div>
-              <Label className="text-xs">عنوان العمل *</Label>
+              <Label className="text-xs">
+                {isMaterialsProvider ? 'اسم الصنف *' : 'عنوان العمل *'}
+              </Label>
               <Input
                 value={newCatalogTitle}
                 onChange={(e) => setNewCatalogTitle(e.target.value)}
-                placeholder="مثال: بناء فيلا 400م"
+                placeholder={isMaterialsProvider ? 'مثال: أسمنت بورتلاندي 50 كجم' : 'مثال: بناء فيلا 400م'}
                 className="mt-1 h-11 rounded-xl bg-muted/40"
               />
             </div>
+
+            {/* حقول السعر والوحدة — فقط لمواد البناء */}
+            {isMaterialsProvider && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">سعر الوحدة (ريال) *</Label>
+                  <Input
+                    type="number"
+                    value={newCatalogPrice}
+                    onChange={(e) => setNewCatalogPrice(e.target.value)}
+                    placeholder="مثال: 8500"
+                    className="mt-1 h-11 rounded-xl bg-muted/40"
+                    dir="ltr"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">وحدة القياس</Label>
+                  <Select value={newCatalogUnit} onValueChange={setNewCatalogUnit}>
+                    <SelectTrigger className="mt-1 h-11 rounded-xl bg-muted/40">
+                      <SelectValue placeholder="اختر الوحدة" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {PRODUCT_UNITS.map((u) => (
+                        <SelectItem key={u} value={u}>{u}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
             <div>
-              <Label className="text-xs">وصف العمل</Label>
+              <Label className="text-xs">
+                {isMaterialsProvider ? 'وصف الصنف' : 'وصف العمل'}
+              </Label>
               <Textarea
                 value={newCatalogDesc}
                 onChange={(e) => setNewCatalogDesc(e.target.value)}
                 rows={3}
                 className="mt-1 rounded-xl bg-muted/40 resize-none text-sm"
-                placeholder="موجز عن العمل والمدة والميزانية…"
+                placeholder={
+                  isMaterialsProvider
+                    ? 'موجز عن الصنف: الماركة، المواصفات، الجودة…'
+                    : 'موجز عن العمل والمدة والميزانية…'
+                }
               />
             </div>
             <Button
@@ -630,7 +760,7 @@ export function ProviderProfileTab({
               className="w-full h-11 rounded-xl font-semibold"
               disabled={uploadingCatalog}
             >
-              إضافة للكاتلوج
+              {isMaterialsProvider ? 'إضافة الصنف' : 'إضافة للكاتلوج'}
             </Button>
           </div>
         </DialogContent>

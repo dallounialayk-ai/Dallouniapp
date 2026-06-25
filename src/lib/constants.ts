@@ -54,3 +54,27 @@ export const getCategoryName = (id: string): string => {
 
 export const APP_NAME = 'دلّوني عليك';
 export const APP_TAGLINE = 'حلقة الوصل بينك وبين كل من تحتاجه لبناء منزلك';
+
+// فئة خدمة مواد البناء — لها كاتلوج منتجات بأسعار بدلاً من أعمال سابقة
+export const BUILDING_MATERIALS_CATEGORY = 'building_materials';
+
+// وحدات القياس الشائعة لمواد البناء
+export const PRODUCT_UNITS = [
+  'قطعة',
+  'كيس',
+  'متر',
+  'متر مربع',
+  'متر مكعب',
+  'طن',
+  'كيلوغرام',
+  'لتر',
+  'حبة',
+  'صندوق',
+  'لولب',
+  'صفيحة',
+] as const;
+
+// التحقق إذا كان مقدم الخدمة يبيع مواد بناء (منتجات بأسعار)
+export function isBuildingMaterialsProvider(serviceCategory: string | null | undefined): boolean {
+  return serviceCategory === BUILDING_MATERIALS_CATEGORY;
+}

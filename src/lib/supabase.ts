@@ -90,8 +90,10 @@ export type CatalogItem = {
   id: string;
   provider_id: string;
   title: string;
-  description: string;
+  description: string | null;
   image_url: string;
+  price: number | null;
+  unit: string | null;
   created_at: string;
 };
 

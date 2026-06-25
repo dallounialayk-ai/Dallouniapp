@@ -20,8 +20,8 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase, type Profile, type CatalogItem, type Message, type Review } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
-import { getCategoryName } from '@/lib/constants';
-import { getInitials, formatRelativeTime } from '@/lib/utils';
+import { getCategoryName, isBuildingMaterialsProvider } from '@/lib/constants';
+import { getInitials, formatRelativeTime, formatCurrency } from '@/lib/utils';
 
 export function ProviderDetailSheet({
   provider, open, onOpenChange, onOpenChat,
@@ -72,6 +72,8 @@ export function ProviderDetailSheet({
   }, [open, provider, loadData]);
 
   if (!provider) return null;
+
+  const isMaterialsProvider = isBuildingMaterialsProvider(provider.service_category);
 
   const handleCall = () => {
     if (!provider?.phone) return;
@@ -248,10 +250,10 @@ export function ProviderDetailSheet({
 
               {/* Catalog */}
               {catalog.length > 0 && (
-                <Section title={`أعمال سابقة (${catalog.length})`}>
-                  <div className="grid grid-cols-3 gap-2">
+                <Section title={isMaterialsProvider ? `الأصناف المتوفرة (${catalog.length})` : `أعمال سابقة (${catalog.length})`}>
+                  <div className={isMaterialsProvider ? "grid grid-cols-2 gap-3" : "grid grid-cols-3 gap-2"}>
                     {catalog.map((c) => (
-                      <CatalogThumb key={c.id} item={c} />
+                      <CatalogThumb key={c.id} item={c} showPrice={isMaterialsProvider} />
                     ))}
                   </div>
                 </Section>
@@ -363,19 +365,39 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function CatalogThumb({ item }: { item: CatalogItem }) {
+function CatalogThumb({ item, showPrice = false }: { item: CatalogItem; showPrice?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button
         onClick={() => setOpen(true)}
-        className="aspect-square rounded-xl overflow-hidden bg-muted/40 elevate-1 hover:elevate-2 transition-all"
+        className="relative rounded-xl overflow-hidden bg-muted/40 elevate-1 hover:elevate-2 transition-all text-right w-full"
       >
-        <img
-          src={item.image_url}
-          alt={item.title}
-          className="w-full h-full object-cover"
-        />
+        <div className={showPrice ? "aspect-square" : "aspect-square"}>
+          <img
+            src={item.image_url}
+            alt={item.title}
+            className="w-full h-full object-cover"
+          />
+          {showPrice && item.price != null && (
+            <div className="absolute top-1.5 right-1.5 bg-primary text-primary-foreground text-[9px] font-bold rounded-full px-1.5 py-0.5 shadow-md">
+              {formatCurrency(item.price)}
+            </div>
+          )}
+        </div>
+        {showPrice && (
+          <div className="p-1.5 bg-card">
+            <div className="font-semibold text-[10px] truncate leading-tight">{item.title}</div>
+            {item.price != null && (
+              <div className="text-primary font-bold text-[10px] mt-0.5 flex items-center gap-0.5">
+                {formatCurrency(item.price)}
+                {item.unit && (
+                  <span className="text-muted-foreground font-normal text-[9px]">/ {item.unit}</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="rounded-3xl max-w-lg">
@@ -383,6 +405,14 @@ function CatalogThumb({ item }: { item: CatalogItem }) {
             <DialogTitle className="text-right">{item.title}</DialogTitle>
             {item.description && (
               <DialogDescription className="text-right">{item.description}</DialogDescription>
+            )}
+            {showPrice && item.price != null && (
+              <div className="text-right mt-2">
+                <span className="inline-flex items-center gap-1 bg-primary/10 text-primary font-bold text-sm rounded-full px-3 py-1">
+                  {formatCurrency(item.price)}
+                  {item.unit && <span className="font-normal text-xs">/ {item.unit}</span>}
+                </span>
+              </div>
             )}
           </DialogHeader>
           <img
