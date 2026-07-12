@@ -6,7 +6,11 @@
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "next build",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "db:push": "echo 'Using Supabase - db:push skipped'",
+    "db:generate": "echo 'Using Supabase - db:generate skipped'",
+    "db:migrate": "echo 'Using Supabase - db:migrate skipped'",
+    "db:reset": "echo 'Using Supabase - db:reset skipped'"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.11",
