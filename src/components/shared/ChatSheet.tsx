@@ -241,15 +241,14 @@ export function ChatSheet({
         );
       }
 
-      // إنشاء إشعار للطرف الآخر
+      // إنشاء إشعار للطرف الآخر (عبر RPC function لتجاوز RLS)
       supabase
-        .from('notifications')
-        .insert({
-          user_id: peer.id,
-          type: 'message',
-          title: 'رسالة جديدة',
-          body: `${profile.full_name}: ${text.slice(0, 60)}`,
-          data: { from: profile.id },
+        .rpc('create_notification', {
+          p_user_id: peer.id,
+          p_type: 'message',
+          p_title: 'رسالة جديدة',
+          p_body: `${profile.full_name}: ${text.slice(0, 60)}`,
+          p_data: { from: profile.id },
         })
         .then(() => {});
     } catch (e: any) {

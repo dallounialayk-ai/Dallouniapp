@@ -83,21 +83,21 @@ export function UserRequestTab({
       return;
     }
 
-    // Notify matching providers (those with same category)
+    // Notify matching providers (those with same category) - via RPC to bypass RLS
     const { data: providers } = await supabase
       .from('profiles')
       .select('id')
       .eq('role', 'provider')
       .eq('service_category', category);
     if (providers && providers.length > 0) {
-      const notifs = providers.map((p) => ({
-        user_id: p.id,
-        type: 'new_request',
-        title: 'طلب خدمة جديد في مجالك',
-        body: `${title.trim()} — ${governorate}`,
-        data: { request_id: (data as ServiceRequest).id },
-      }));
-      await supabase.from('notifications').insert(notifs);
+      const providerIds = providers.map((p) => p.id);
+      await supabase.rpc('create_notifications_batch', {
+        p_user_ids: providerIds,
+        p_type: 'new_request',
+        p_title: 'طلب خدمة جديد في مجالك',
+        p_body: `${title.trim()} — ${governorate}`,
+        p_data: { request_id: (data as ServiceRequest).id },
+      });
     }
 
     toast.success('تم نشر طلبك بنجاح، ستصلك العروض قريبًا');

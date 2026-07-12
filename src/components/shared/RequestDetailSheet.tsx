@@ -118,13 +118,13 @@ export function RequestDetailSheet({
       return;
     }
 
-    // Notify the request owner
-    await supabase.from('notifications').insert({
-      user_id: request.user_id,
-      type: 'offer',
-      title: 'عرض سعر جديد',
-      body: `${profile.full_name} قدّم عرضًا على طلبك "${request.title}"`,
-      data: { request_id: request.id },
+    // Notify the request owner (via RPC to bypass RLS)
+    await supabase.rpc('create_notification', {
+      p_user_id: request.user_id,
+      p_type: 'offer',
+      p_title: 'عرض سعر جديد',
+      p_body: `${profile.full_name} قدّم عرضًا على طلبك "${request.title}"`,
+      p_data: { request_id: request.id },
     });
 
     toast.success('تم تقديم عرضك بنجاح');
@@ -145,12 +145,13 @@ export function RequestDetailSheet({
       toast.error(error.message);
       return;
     }
-    await supabase.from('notifications').insert({
-      user_id: offer.provider_id,
-      type: 'offer_accepted',
-      title: 'تم قبول عرضك',
-      body: `تم قبول عرضك على الطلب "${request?.title}"`,
-      data: { request_id: request?.id },
+    // Notify provider of acceptance (via RPC to bypass RLS)
+    await supabase.rpc('create_notification', {
+      p_user_id: offer.provider_id,
+      p_type: 'offer_accepted',
+      p_title: 'تم قبول عرضك',
+      p_body: `تم قبول عرضك على الطلب "${request?.title}"`,
+      p_data: { request_id: request?.id },
     });
     toast.success('تم قبول العرض');
     loadOffers();
@@ -165,13 +166,13 @@ export function RequestDetailSheet({
       toast.error(error.message);
       return;
     }
-    // إشعار مقدم الخدمة برفض العرض
-    await supabase.from('notifications').insert({
-      user_id: offer.provider_id,
-      type: 'offer_rejected',
-      title: 'تم رفض عرضك',
-      body: `تم رفض عرضك على الطلب "${request?.title}"`,
-      data: { request_id: request?.id },
+    // Notify provider of rejection (via RPC to bypass RLS)
+    await supabase.rpc('create_notification', {
+      p_user_id: offer.provider_id,
+      p_type: 'offer_rejected',
+      p_title: 'تم رفض عرضك',
+      p_body: `تم رفض عرضك على الطلب "${request?.title}"`,
+      p_data: { request_id: request?.id },
     });
     toast.success('تم رفض العرض');
     loadOffers();
