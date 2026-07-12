@@ -238,7 +238,7 @@ export function ProviderDetailSheet({
                   <Phone className="w-4 h-4 ml-1.5" />
                   اتصال
                 </Button>
-                {provider.whatsapp_number && (
+                {provider.whatsapp_number && provider.whatsapp_number.trim() !== '' && (
                   <Button
                     variant="outline"
                     onClick={() => handleWhatsapp(provider.whatsapp_number!, provider.full_name)}
