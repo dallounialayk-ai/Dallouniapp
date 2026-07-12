@@ -148,7 +148,7 @@ function NotifRow({ notif }: { notif: AppNotification }) {
   const icon = (() => {
     switch (notif.type) {
       case 'message': return <MessageCircle className="w-4 h-4" />;
-      case 'offer': case 'offer_accepted': return <CircleDollarSign className="w-4 h-4" />;
+      case 'offer': case 'offer_accepted': case 'offer_rejected': return <CircleDollarSign className="w-4 h-4" />;
       case 'new_request': return <FileText className="w-4 h-4" />;
       default: return <Sparkles className="w-4 h-4" />;
     }
@@ -157,6 +157,7 @@ function NotifRow({ notif }: { notif: AppNotification }) {
     switch (notif.type) {
       case 'message': return 'bg-blue-100 text-blue-600';
       case 'offer': case 'offer_accepted': return 'bg-emerald-100 text-emerald-600';
+      case 'offer_rejected': return 'bg-red-100 text-red-600';
       case 'new_request': return 'bg-amber-100 text-amber-600';
       default: return 'bg-purple-100 text-purple-600';
     }

@@ -165,6 +165,14 @@ export function RequestDetailSheet({
       toast.error(error.message);
       return;
     }
+    // إشعار مقدم الخدمة برفض العرض
+    await supabase.from('notifications').insert({
+      user_id: offer.provider_id,
+      type: 'offer_rejected',
+      title: 'تم رفض عرضك',
+      body: `تم رفض عرضك على الطلب "${request?.title}"`,
+      data: { request_id: request?.id },
+    });
     toast.success('تم رفض العرض');
     loadOffers();
   };
