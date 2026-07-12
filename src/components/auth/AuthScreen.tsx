@@ -6,7 +6,7 @@ import {
   Home, Wrench, User, Building2, ArrowRight, ArrowLeft,
   Phone, Mail, Lock, MapPin, UserCircle2, Briefcase,
   Sparkles, Shield, CheckCircle2, ChevronDown, AlertTriangle,
-  Settings, ExternalLink, Info, X,
+  Settings, ExternalLink, Info, X, MessageCircle,
 } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { Button } from '@/components/ui/button';
@@ -291,6 +291,7 @@ function RegisterForm({
   const { signUp, loading } = useAuth();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
   const [email, setEmail] = useState('');
   const [governorate, setGovernorate] = useState('');
   const [password, setPassword] = useState('');
@@ -316,6 +317,7 @@ function RegisterForm({
       password,
       fullName,
       phone,
+      whatsappNumber: whatsapp.trim() || undefined,
       governorate,
       role: role as UserRole,
       bio: role === 'provider' ? bio : undefined,
@@ -372,6 +374,17 @@ function RegisterForm({
             placeholder="7XX XXX XXX"
             className="pr-10 h-12 rounded-xl bg-muted/40 border-border/60 focus:bg-card"
             required
+            dir="ltr"
+          />
+        </Field>
+
+        <Field label="رقم الواتساب (اختياري)" icon={<MessageCircle className="w-4 h-4" />}>
+          <Input
+            type="tel"
+            value={whatsapp}
+            onChange={(e) => setWhatsapp(e.target.value)}
+            placeholder="7XX XXX XXX"
+            className="pr-10 h-12 rounded-xl bg-muted/40 border-border/60 focus:bg-card"
             dir="ltr"
           />
         </Field>

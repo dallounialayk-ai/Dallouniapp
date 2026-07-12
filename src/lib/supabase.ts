@@ -17,6 +17,7 @@ export type Profile = {
   id: string;
   full_name: string;
   phone: string;
+  whatsapp_number: string | null;
   email: string;
   governorate: string;
   role: UserRole;

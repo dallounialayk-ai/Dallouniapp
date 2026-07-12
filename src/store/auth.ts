@@ -16,6 +16,7 @@ type AuthState = {
       password: string;
       fullName: string;
       phone: string;
+      whatsappNumber?: string;
       governorate: string;
       role: UserRole;
       bio?: string;
@@ -76,6 +77,7 @@ export const useAuth = create<AuthState>()(
             if (data.serviceCategory) updateData.service_category = data.serviceCategory;
             updateData.full_name = data.fullName;
             updateData.phone = data.phone;
+            updateData.whatsapp_number = data.whatsappNumber || null;
             updateData.governorate = data.governorate;
 
             await supabase

@@ -41,6 +41,7 @@ export function UserProfileTab({
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
+  const [whatsapp, setWhatsapp] = useState(profile?.whatsapp_number ?? '');
   const [governorate, setGovernorate] = useState(profile?.governorate ?? '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? '');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -125,6 +126,7 @@ export function UserProfileTab({
     const { error } = await updateProfile({
       full_name: fullName,
       phone,
+      whatsapp_number: whatsapp.trim() || null,
       governorate,
       avatar_url: avatarUrl,
     });
@@ -220,6 +222,12 @@ export function UserProfileTab({
                       {profile.governorate}
                     </span>
                   </div>
+                  {profile.whatsapp_number && (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-emerald-600">
+                      <MessageCircle className="w-3 h-3" />
+                      واتساب: {profile.whatsapp_number}
+                    </div>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -245,6 +253,16 @@ export function UserProfileTab({
                     <Input
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
+                      className="mt-1 h-10 rounded-xl bg-muted/40"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">رقم الواتساب</Label>
+                    <Input
+                      value={whatsapp}
+                      onChange={(e) => setWhatsapp(e.target.value)}
+                      placeholder="7XX XXX XXX"
                       className="mt-1 h-10 rounded-xl bg-muted/40"
                       dir="ltr"
                     />
