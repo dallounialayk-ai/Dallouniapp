@@ -1,22 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Cairo, Tajawal } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
-
-const cairo = Cairo({
-  variable: "--font-sans",
-  subsets: ["arabic", "latin"],
-  weight: ["300", "400", "500", "600", "700", "800", "900"],
-  display: "swap",
-});
-
-const tajawal = Tajawal({
-  variable: "--font-display",
-  subsets: ["arabic", "latin"],
-  weight: ["400", "500", "700", "800"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "دلّوني عليك | حلقة الوصل لبناء منزلك",
@@ -65,9 +50,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
-      <body
-        className={`${cairo.variable} ${tajawal.variable} font-sans antialiased bg-background text-foreground overflow-hidden`}
-      >
+      <body className="font-sans antialiased bg-background text-foreground overflow-hidden">
         {children}
         <Toaster />
         <SonnerToaster position="top-center" richColors closeButton />
