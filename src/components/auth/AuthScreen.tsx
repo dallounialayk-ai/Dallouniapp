@@ -394,47 +394,37 @@ function RegisterForm({
         </Field>
 
         <Field label="رقم الواتساب (اختياري)" icon={<MessageCircle className="w-4 h-4" />}>
-          <div className="relative">
-            <Input
-              type="tel"
-              value={whatsapp}
-              onChange={(e) => {
-                setWhatsapp(e.target.value);
-                setWhatsappCopied(false);
-              }}
-              placeholder="7XX XXX XXX"
-              className="pr-10 h-12 rounded-xl bg-muted/40 border-border/60 focus:bg-card"
-              dir="ltr"
-            />
-            {/* زر ذكي: "استخدام رقم الهاتف" — يظهر فقط عند توفر شرط معين */}
-            {showCopyButton && (
-              <button
-                type="button"
-                onClick={copyPhoneToWhatsapp}
-                className="absolute left-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2.5 h-9 rounded-lg bg-emerald-500/10 text-emerald-600 text-[11px] font-semibold hover:bg-emerald-500/20 active:scale-95 transition-all"
-                title="استخدام نفس رقم الهاتف"
-              >
-                {whatsappCopied ? (
-                  <>
-                    <Check className="w-3 h-3" />
-                    تم
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3 h-3" />
-                    كرقم الهاتف
-                  </>
-                )}
-              </button>
-            )}
-            {/* مؤشر "تم النسخ" عندما يكون الواتساب مساويًا للهاتف */}
-            {whatsappCopied && !showCopyButton && (
-              <div className="absolute left-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 text-[10px] font-medium pointer-events-none">
-                <Check className="w-3 h-3" />
-                من الهاتف
-              </div>
-            )}
-          </div>
+          <Input
+            type="tel"
+            value={whatsapp}
+            onChange={(e) => {
+              setWhatsapp(e.target.value);
+              setWhatsappCopied(false);
+            }}
+            placeholder="7XX XXX XXX"
+            className="pr-10 h-12 rounded-xl bg-muted/40 border-border/60 focus:bg-card"
+            dir="ltr"
+          />
+          {/* زر ذكي: "استخدام نفس رقم الهاتف" — يظهر أسفل الحقل بشكل نظيف */}
+          {showCopyButton && (
+            <button
+              type="button"
+              onClick={copyPhoneToWhatsapp}
+              className="mt-1.5 w-full flex items-center justify-center gap-1.5 h-9 rounded-lg bg-emerald-500/10 text-emerald-600 text-xs font-semibold hover:bg-emerald-500/20 active:scale-[0.98] transition-all border border-emerald-500/20"
+            >
+              {whatsappCopied ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  تم نسخ رقم الهاتف
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  استخدام نفس رقم الهاتف
+                </>
+              )}
+            </button>
+          )}
         </Field>
 
         <Field label="البريد الإلكتروني" icon={<Mail className="w-4 h-4" />}>
