@@ -50,7 +50,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
-      <body className="font-sans antialiased bg-background text-foreground overflow-hidden">
+      <body className="font-sans antialiased bg-background text-foreground overflow-x-hidden overflow-y-hidden w-full max-w-full">
         {children}
         <Toaster />
         <SonnerToaster position="top-center" richColors closeButton />

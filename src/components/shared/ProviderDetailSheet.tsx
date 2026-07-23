@@ -169,7 +169,7 @@ export function ProviderDetailSheet({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
           side="bottom"
-          className="h-[92vh] max-h-[92vh] p-0 rounded-t-3xl flex flex-col"
+          className="h-[92%] max-h-[92%] p-0 rounded-t-3xl flex flex-col"
         >
           <SheetHeader className="px-5 pt-4 pb-3 border-b border-border/40 shrink-0">
             <div className="flex items-center justify-between">

@@ -23,6 +23,14 @@ node_modules
 # misc
 .DS_Store
 *.pem
+*.pid
+.zscripts/*.pid
+
+# local databases / runtime artifacts
+db/*.db
+db/*.db-*
+*.sqlite
+*.sqlite3
 
 # debug
 npm-debug.log*
@@ -39,7 +47,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -49,9 +56,9 @@ local-*
 *.log
 dev.log
 dev.out.log
+server.log
 test
 prompt
 
-server.log
 # Skills directory
 /skills/

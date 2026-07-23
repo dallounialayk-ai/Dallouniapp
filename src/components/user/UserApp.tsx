@@ -47,7 +47,7 @@ export function UserApp() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full min-h-0 min-w-0 w-full overflow-x-hidden bg-background">
       {/* Top bar */}
       <header className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40">
         <div>
@@ -83,7 +83,7 @@ export function UserApp() {
       </main>
 
       {/* Bottom tab bar */}
-      <nav className="shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 border-t border-border/40 px-2 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <nav className="shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 border-t border-border/40 px-2 pt-1 pb-2">
         <div className="grid grid-cols-3 gap-1">
           <TabButton
             active={tab === 'home'}
@@ -115,7 +115,11 @@ export function UserApp() {
       />
       <RequestDetailSheet
         request={selectedRequest}
-        requestOwner={null}
+        requestOwner={
+          selectedRequest && profile && selectedRequest.user_id === profile.id
+            ? profile
+            : null
+        }
         open={requestSheetOpen}
         onOpenChange={setRequestSheetOpen}
         onOpenChat={handleOpenChat}

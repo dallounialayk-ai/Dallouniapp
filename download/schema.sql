@@ -15,6 +15,8 @@ create table if not exists public.profiles (
   avatar_url text,
   bio text,
   service_category text,
+  latitude double precision,
+  longitude double precision,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -28,6 +30,9 @@ create table if not exists public.service_requests (
   description text not null,
   governorate text not null,
   status text not null check (status in ('open','closed')) default 'open',
+  latitude double precision,
+  longitude double precision,
+  location_label text,
   created_at timestamptz not null default now()
 );
 

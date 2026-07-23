@@ -61,6 +61,19 @@ export function ChatSheet({
       if (prev.some((m) => m.id === msg.id)) {
         return prev;
       }
+      // استبدال الرسالة المؤقتة (optimistic) بالرسالة الحقيقية من Realtime
+      const tempIdx = prev.findIndex(
+        (m) =>
+          m.id.startsWith('temp-') &&
+          m.sender_id === msg.sender_id &&
+          m.receiver_id === msg.receiver_id &&
+          m.content === msg.content
+      );
+      if (tempIdx >= 0) {
+        const updated = [...prev];
+        updated[tempIdx] = msg;
+        return updated;
+      }
       // إدراج بالترتيب الزمني
       const last = prev[prev.length - 1];
       if (!last || new Date(msg.created_at) >= new Date(last.created_at)) {
@@ -233,12 +246,17 @@ export function ChatSheet({
 
       if (error) throw error;
 
-      // استبدال الرسالة المؤقتة بالرسالة الحقيقية
+      // استبدال الرسالة المؤقتة بالرسالة الحقيقية (مع إزالة أي نسخة مكررة من Realtime)
       if (data) {
         const realMsg = data as Message;
-        setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? realMsg : m))
-        );
+        setMessages((prev) => {
+          const withoutTempAndDup = prev.filter(
+            (m) => m.id !== tempId && m.id !== realMsg.id
+          );
+          return [...withoutTempAndDup, realMsg].sort(
+            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+        });
       }
 
       // إنشاء إشعار للطرف الآخر (عبر RPC function لتجاوز RLS)
@@ -267,7 +285,7 @@ export function ChatSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="h-[92vh] max-h-[92vh] p-0 rounded-t-3xl flex flex-col"
+        className="h-[92%] max-h-[92%] p-0 rounded-t-3xl flex flex-col"
       >
         <SheetHeader className="px-4 py-3 border-b border-border/40 shrink-0">
           <div className="flex items-center gap-3">

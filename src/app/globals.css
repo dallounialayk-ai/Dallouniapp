@@ -97,16 +97,27 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    box-sizing: border-box;
   }
   html, body {
     @apply bg-background text-foreground;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
+  html {
+    height: 100%;
   }
   body {
     font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
     letter-spacing: -0.01em;
+    height: 100%;
+    overflow-y: hidden;
+    position: relative;
   }
 
   /* Apple-style typography scale */
@@ -168,10 +179,15 @@
    - Three variants: webkit native, firefox, and overlay-mode for sheets
    =========================================== */
 
-/* Default global scrollbar (used by body, scrollable areas) */
+/* Default global scrollbar — vertical only (no horizontal bar) */
 ::-webkit-scrollbar {
   width: 8px;
-  height: 8px;
+  height: 0;
+}
+::-webkit-scrollbar:horizontal {
+  display: none;
+  height: 0;
+  width: 0;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -187,7 +203,7 @@
   background-clip: content-box;
 }
 
-/* Firefox */
+/* Firefox — thin vertical scrollbar; hide horizontal via overflow-x */
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
@@ -195,12 +211,20 @@
 
 /* Apple-style thin scrollbar utility (for compact areas, sidebars, tabs) */
 .scrollbar-thin {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-x: none;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
-  height: 6px;
+  height: 0;
+}
+.scrollbar-thin::-webkit-scrollbar:horizontal {
+  display: none;
+  height: 0;
 }
 .scrollbar-thin::-webkit-scrollbar-track {
   background: transparent;
@@ -218,14 +242,20 @@
 
 /* Overlay scrollbar (auto-hides when not scrolling — used in Sheets/Dialogs) */
 .scrollbar-overlay {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-x: none;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
-  /* on Webkit, we cannot fully auto-hide without JS, but we make it overlay */
 }
 .scrollbar-overlay::-webkit-scrollbar {
   width: 6px;
-  height: 6px;
-  -webkit-overflow-scrolling: touch;
+  height: 0;
+}
+.scrollbar-overlay::-webkit-scrollbar:horizontal {
+  display: none;
+  height: 0;
 }
 .scrollbar-overlay::-webkit-scrollbar-track {
   background: transparent;
@@ -310,19 +340,16 @@ button:active, a:active, [role="button"]:active {
    =========================================== */
 
 .mobile-shell-root {
-  /* على الموبايل: يملأ الشاشة بالكامل */
-  width: 100vw;
+  /* 100% وليس 100vw — 100vw يسبب شريط تمرير أفقي */
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--background);
-
-  /* safe area insets للآيفون (notch, dynamic island, home indicator) */
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
-
-  /* على الشاشات الكبيرة: خلفية رمادية ومحاكاة موبايل */
+  overflow-x: hidden;
+  overflow-y: hidden;
+  overscroll-behavior-x: none;
   display: flex;
   align-items: stretch;
   justify-content: center;
@@ -331,28 +358,38 @@ button:active, a:active, [role="button"]:active {
 .mobile-shell-frame {
   width: 100%;
   max-width: 100%;
+  height: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--background);
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  overscroll-behavior-x: none;
   display: flex;
   flex-direction: column;
+  /* safe areas داخل الإطار حتى لا تزيد العرض عن الشاشة */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  isolation: isolate;
 }
 
 /* على الشاشات الأكبر من موبايل (أكثر من 480px): عرض كإطار موبايل */
 @media (min-width: 481px) {
   .mobile-shell-root {
     background: linear-gradient(135deg, oklch(0.94 0.01 250), oklch(0.97 0.005 240));
-    padding: 0;
     align-items: center;
     justify-content: center;
     padding: 24px 12px;
     min-height: 100vh;
     min-height: 100dvh;
+    height: 100vh;
+    height: 100dvh;
   }
   .mobile-shell-frame {
-    width: 390px;
+    width: min(390px, 100%);
     max-width: 100%;
     min-height: min(844px, calc(100vh - 48px));
     min-height: min(844px, calc(100dvh - 48px));
@@ -364,7 +401,13 @@ button:active, a:active, [role="button"]:active {
       0 12px 32px -4px rgba(0, 0, 0, 0.08),
       0 32px 64px -12px rgba(0, 0, 0, 0.12),
       inset 0 0 0 1px rgba(0, 0, 0, 0.04);
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    /* إطار الديسكتوب لا يحتاج safe-area الجهاز */
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
   }
 }
 
@@ -374,7 +417,7 @@ button:active, a:active, [role="button"]:active {
     padding: 32px 16px;
   }
   .mobile-shell-frame {
-    width: 430px;
+    width: min(430px, 100%);
     height: min(932px, calc(100dvh - 64px));
     min-height: min(932px, calc(100dvh - 64px));
     border-radius: 44px;
@@ -403,6 +446,135 @@ button:active, a:active, [role="button"]:active {
 .min-h-mobile {
   min-height: 100vh;
   min-height: 100dvh;
+}
+
+/* ===========================================
+   Leaflet map — علامات أصحاب الخدمة
+   =========================================== */
+.providers-map-shell .leaflet-container {
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
+  background: oklch(0.96 0.005 240);
+}
+
+.provider-map-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.provider-marker-wrap {
+  position: relative;
+  width: 48px;
+  height: 62px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.18));
+}
+
+.provider-marker-avatar-ring {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 2.5px solid #fff;
+  background: #0071e3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.25);
+}
+
+.provider-marker-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.provider-marker-initial {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.provider-marker-pin {
+  width: 14px;
+  height: 14px;
+  background: #0071e3;
+  transform: rotate(45deg);
+  margin-top: -8px;
+  border-radius: 2px 2px 2px 10px;
+  z-index: 1;
+  border: 2px solid #fff;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px;
+}
+
+/* علامة موقع طلب الخدمة مع ملاحظة العنوان */
+.request-map-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.request-marker-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 230px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.16));
+}
+
+.request-marker-label {
+  max-width: 220px;
+  background: #fff;
+  color: oklch(0.22 0.02 250);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 7px 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 113, 227, 0.18);
+  text-align: center;
+  direction: rtl;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.request-marker-pin-stem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.request-marker-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #0071e3;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.35);
+}
+
+.request-marker-point {
+  width: 12px;
+  height: 12px;
+  background: #0071e3;
+  transform: rotate(45deg);
+  margin-top: -6px;
+  border-radius: 2px 2px 2px 8px;
+  border: 2px solid #fff;
 }
 
 /* منع التكبير بالضغط المزدوج على iOS */

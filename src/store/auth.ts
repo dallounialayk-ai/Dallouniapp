@@ -21,8 +21,10 @@ type AuthState = {
       role: UserRole;
       bio?: string;
       serviceCategory?: string;
+      latitude?: number | null;
+      longitude?: number | null;
     }
-  ) => Promise<{ error: string | null }>;
+  ) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -51,6 +53,11 @@ export const useAuth = create<AuthState>()(
                 phone: data.phone,
                 governorate: data.governorate,
                 role: data.role,
+                bio: data.bio ?? null,
+                service_category: data.serviceCategory ?? null,
+                whatsapp_number: data.whatsappNumber || null,
+                latitude: data.latitude ?? null,
+                longitude: data.longitude ?? null,
               },
             },
           });
@@ -68,7 +75,7 @@ export const useAuth = create<AuthState>()(
             return {
               error: 'needs_email_confirmation',
               needsEmailConfirmation: true,
-            } as any;
+            };
           }
 
           if (signUpData.user && signUpData.session) {
@@ -79,6 +86,8 @@ export const useAuth = create<AuthState>()(
             updateData.phone = data.phone;
             updateData.whatsapp_number = data.whatsappNumber || null;
             updateData.governorate = data.governorate;
+            if (data.latitude != null) updateData.latitude = data.latitude;
+            if (data.longitude != null) updateData.longitude = data.longitude;
 
             await supabase
               .from('profiles')

@@ -296,6 +296,7 @@ export function UserProfileTab({
                         setPhone(profile.phone);
                         setGovernorate(profile.governorate);
                         setAvatarUrl(profile.avatar_url ?? '');
+                        setWhatsapp(profile.whatsapp_number ?? '');
                       }}
                       className="flex-1 h-10 rounded-xl"
                     >

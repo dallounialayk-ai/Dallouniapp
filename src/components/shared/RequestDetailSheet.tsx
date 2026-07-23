@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   MapPin, MessageCircle, Phone, Flag, Share2, Clock, Tag,
-  X, Send, CheckCircle2, ChevronLeft, CircleDollarSign,
+  X, Send, CheckCircle2, CircleDollarSign, ArrowRight, MapPinned,
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -22,6 +22,8 @@ import { supabase, type ServiceRequest, type Profile, type Offer } from '@/lib/s
 import { useAuth } from '@/store/auth';
 import { getCategoryName } from '@/lib/constants';
 import { getInitials, formatRelativeTime, formatCurrency } from '@/lib/utils';
+import { isValidCoords, reverseGeocode, getGovernorateCenter } from '@/lib/geo';
+import { RequestLocationMap } from '@/components/shared/ProvidersMapDynamic';
 
 export function RequestDetailSheet({
   request, requestOwner, open, onOpenChange, onOpenChat, onOfferSubmitted,
@@ -42,6 +44,11 @@ export function RequestDetailSheet({
   const [reportReason, setReportReason] = useState('');
   const [reportComment, setReportComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showLocationMap, setShowLocationMap] = useState(false);
+  const [resolvedLabel, setResolvedLabel] = useState<string | null>(null);
+  const [freshRequest, setFreshRequest] = useState<ServiceRequest | null>(null);
+
+  const activeRequest = freshRequest ?? request;
 
   const loadOffers = useCallback(async () => {
     if (!request) return;
@@ -57,15 +64,82 @@ export function RequestDetailSheet({
     if (open && request) loadOffers();
   }, [open, request, loadOffers]);
 
-  if (!request) return null;
+  // إعادة جلب الطلب لضمان وجود أعمدة الموقع من قاعدة البيانات
+  useEffect(() => {
+    if (!open || !request?.id) {
+      setFreshRequest(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from('service_requests')
+        .select('*')
+        .eq('id', request.id)
+        .single();
+      if (!cancelled && data) {
+        setFreshRequest(data as ServiceRequest);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, request?.id]);
 
-  const isOwner = profile?.id === request.user_id;
+  useEffect(() => {
+    if (!open) {
+      setShowLocationMap(false);
+      setResolvedLabel(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !activeRequest) return;
+
+    // أظهر العنوان المحفوظ فورًا ثم حسّنه بدقة أعلى من الخريطة
+    if (activeRequest.location_label) {
+      setResolvedLabel(activeRequest.location_label);
+    } else if (activeRequest.governorate) {
+      setResolvedLabel(activeRequest.governorate);
+    }
+
+    if (!isValidCoords(activeRequest.latitude, activeRequest.longitude)) {
+      return;
+    }
+
+    let cancelled = false;
+    void reverseGeocode(
+      activeRequest.latitude!,
+      activeRequest.longitude!,
+      activeRequest.governorate
+    ).then((label) => {
+      if (!cancelled && label) setResolvedLabel(label);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, activeRequest]);
+
+  if (!request || !activeRequest) return null;
+
+  const isOwner = profile?.id === activeRequest.user_id;
   const myOffer = offers.find((o) => o.provider_id === profile?.id);
+  const hasExactCoords = isValidCoords(activeRequest.latitude, activeRequest.longitude);
+  const mapCoords = hasExactCoords
+    ? { lat: activeRequest.latitude!, lng: activeRequest.longitude! }
+    : getGovernorateCenter(activeRequest.governorate || 'أمانة العاصمة');
+  // يظهر الزر دائمًا طالما توجد محافظة أو إحداثيات
+  const canShowLocation = !!(activeRequest.governorate || hasExactCoords);
+  const placeLabel =
+    resolvedLabel ||
+    activeRequest.location_label ||
+    activeRequest.governorate ||
+    'موقع الخدمة';
 
   const handleShare = async () => {
     const shareData = {
-      title: request.title,
-      text: `طلب خدمة: ${request.title} — ${request.description}`,
+      title: activeRequest.title,
+      text: `طلب خدمة: ${activeRequest.title} — ${activeRequest.description}`,
       url: window.location.href,
     };
     try {
@@ -137,6 +211,7 @@ export function RequestDetailSheet({
   };
 
   const handleAcceptOffer = async (offer: Offer) => {
+    if (!request) return;
     const { error } = await supabase
       .from('offers')
       .update({ status: 'accepted' })
@@ -145,16 +220,29 @@ export function RequestDetailSheet({
       toast.error(error.message);
       return;
     }
+    // رفض باقي العروض المعلقة وإغلاق الطلب
+    await supabase
+      .from('offers')
+      .update({ status: 'rejected' })
+      .eq('request_id', request.id)
+      .eq('status', 'pending')
+      .neq('id', offer.id);
+    await supabase
+      .from('service_requests')
+      .update({ status: 'closed' })
+      .eq('id', request.id);
+
     // Notify provider of acceptance (via RPC to bypass RLS)
     await supabase.rpc('create_notification', {
       p_user_id: offer.provider_id,
       p_type: 'offer_accepted',
       p_title: 'تم قبول عرضك',
-      p_body: `تم قبول عرضك على الطلب "${request?.title}"`,
-      p_data: { request_id: request?.id },
+      p_body: `تم قبول عرضك على الطلب "${request.title}"`,
+      p_data: { request_id: request.id },
     });
     toast.success('تم قبول العرض');
     loadOffers();
+    onOfferSubmitted?.();
   };
 
   const handleRejectOffer = async (offer: Offer) => {
@@ -205,8 +293,47 @@ export function RequestDetailSheet({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
           side="bottom"
-          className="h-[92vh] max-h-[92vh] p-0 rounded-t-3xl flex flex-col"
+          className="h-[92%] max-h-[92%] p-0 rounded-t-3xl flex flex-col overflow-x-hidden"
         >
+          {showLocationMap && canShowLocation ? (
+            <>
+              <div className="shrink-0 px-3 pt-4 pb-2 flex items-center gap-2 border-b border-border/40">
+                <button
+                  type="button"
+                  onClick={() => setShowLocationMap(false)}
+                  className="h-10 px-3 rounded-xl bg-muted/50 hover:bg-muted flex items-center gap-1.5 text-sm font-semibold transition-colors"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  تراجع
+                </button>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold flex items-center gap-1.5 truncate">
+                    <MapPinned className="w-4 h-4 text-primary shrink-0" />
+                    موقع الخدمة
+                  </div>
+                  <div className="text-[11px] text-muted-foreground truncate">
+                    {placeLabel}
+                    {!hasExactCoords ? ' (تقريبي حسب المحافظة)' : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onOpenChange(false)}
+                  className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center hover:bg-muted shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 p-3">
+                <RequestLocationMap
+                  location={mapCoords}
+                  label={placeLabel}
+                  zoom={hasExactCoords ? 16 : 12}
+                  height="100%"
+                />
+              </div>
+            </>
+          ) : (
+            <>
           <SheetHeader className="px-5 pt-4 pb-3 border-b border-border/40 shrink-0">
             <div className="flex items-center justify-between">
               <SheetTitle className="text-base font-bold">تفاصيل الطلب</SheetTitle>
@@ -224,28 +351,38 @@ export function RequestDetailSheet({
             <div className="p-5 space-y-5">
               {/* Title and meta */}
               <div>
-                <h2 className="text-xl font-bold leading-tight">{request.title}</h2>
+                <h2 className="text-xl font-bold leading-tight">{activeRequest.title}</h2>
                 <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
                   <Badge variant="secondary" className="font-medium flex items-center gap-1">
                     <Tag className="w-2.5 h-2.5" />
-                    {getCategoryName(request.category)}
+                    {getCategoryName(activeRequest.category)}
                   </Badge>
                   <span className="flex items-center gap-1 text-muted-foreground">
                     <MapPin className="w-2.5 h-2.5" />
-                    {request.governorate}
+                    {placeLabel}
                   </span>
                   <span className="flex items-center gap-1 text-muted-foreground">
                     <Clock className="w-2.5 h-2.5" />
-                    {formatRelativeTime(request.created_at)}
+                    {formatRelativeTime(activeRequest.created_at)}
                   </span>
                 </div>
               </div>
+
+              {canShowLocation && (
+                <Button
+                  onClick={() => setShowLocationMap(true)}
+                  className="h-11 rounded-xl font-semibold w-full gap-2"
+                >
+                  <MapPinned className="w-4 h-4" />
+                  عرض موقع الخدمة
+                </Button>
+              )}
 
               {/* Description */}
               <div>
                 <h3 className="text-sm font-bold text-muted-foreground mb-2">وصف الخدمة</h3>
                 <div className="bg-muted/40 rounded-2xl p-3.5 text-sm leading-relaxed whitespace-pre-wrap">
-                  {request.description}
+                  {activeRequest.description}
                 </div>
               </div>
 
@@ -315,14 +452,16 @@ export function RequestDetailSheet({
                 </>
               )}
 
-              {isOwner && requestOwner && (
+              {isOwner && requestOwner?.phone && (
                 <Button
                   variant="outline"
-                  onClick={() => onOpenChat(requestOwner)}
+                  asChild
                   className="h-11 rounded-xl font-semibold w-full"
                 >
-                  <Phone className="w-4 h-4 ml-2" />
-                  اتصال بصاحب الطلب
+                  <a href={`tel:${requestOwner.phone}`}>
+                    <Phone className="w-4 h-4 ml-2" />
+                    اتصال برقمي
+                  </a>
                 </Button>
               )}
 
@@ -375,6 +514,8 @@ export function RequestDetailSheet({
               </div>
             </div>
           </div>
+            </>
+          )}
         </SheetContent>
       </Sheet>
 

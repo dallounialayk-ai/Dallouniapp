@@ -28,6 +28,7 @@ export function NotificationsSheet({
       .from('notifications')
       .select('*')
       .eq('user_id', profile.id)
+      .eq('read', false)
       .order('created_at', { ascending: false })
       .limit(50);
     setNotifications((data ?? []) as AppNotification[]);
@@ -73,7 +74,15 @@ export function NotificationsSheet({
 
   const handleClear = async () => {
     if (!profile) return;
-    await supabase.from('notifications').delete().eq('user_id', profile.id);
+    // Soft-clear: mark all as read (DELETE قد يكون محظورًا بـ RLS)
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', profile.id);
+    if (error) {
+      toast.error(error.message || 'تعذّر مسح الإشعارات');
+      return;
+    }
     setNotifications([]);
   };
 
@@ -81,7 +90,7 @@ export function NotificationsSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="h-[80vh] max-h-[80vh] p-0 rounded-t-3xl flex flex-col"
+        className="h-[80%] max-h-[80%] p-0 rounded-t-3xl flex flex-col"
       >
         <SheetHeader className="px-5 pt-4 pb-3 border-b border-border/40 shrink-0">
           <div className="flex items-center justify-between">
@@ -135,7 +144,15 @@ export function NotificationsSheet({
                 <p className="text-xs text-muted-foreground mt-1">ستظهر هنا عند وصول رسالة أو عرض جديد</p>
               </div>
             ) : (
-              notifications.map((n) => <NotifRow key={n.id} notif={n} />)
+              notifications.map((n) => (
+                <NotifRow
+                  key={n.id}
+                  notif={n}
+                  onRead={(id) =>
+                    setNotifications((prev) => prev.filter((x) => x.id !== id))
+                  }
+                />
+              ))
             )}
           </div>
         </div>
@@ -144,7 +161,13 @@ export function NotificationsSheet({
   );
 }
 
-function NotifRow({ notif }: { notif: AppNotification }) {
+function NotifRow({
+  notif,
+  onRead,
+}: {
+  notif: AppNotification;
+  onRead: (id: string) => void;
+}) {
   const icon = (() => {
     switch (notif.type) {
       case 'message': return <MessageCircle className="w-4 h-4" />;
@@ -166,6 +189,7 @@ function NotifRow({ notif }: { notif: AppNotification }) {
   const handleMarkRead = async () => {
     if (!notif.read) {
       await supabase.from('notifications').update({ read: true }).eq('id', notif.id);
+      onRead(notif.id);
     }
   };
 

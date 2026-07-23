@@ -1,20 +1,34 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Search, SlidersHorizontal, X, RefreshCw } from 'lucide-react';
+import { Search, SlidersHorizontal, X, RefreshCw, MapPinned, List, ArrowRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { supabase, type Profile, type Review } from '@/lib/supabase';
+import { supabase, type Profile } from '@/lib/supabase';
 import { SERVICE_CATEGORIES, getCategoryName } from '@/lib/constants';
 import { ProviderCard } from '@/components/shared/ProviderCard';
+import { ProvidersMap } from '@/components/shared/ProvidersMapDynamic';
+import { LocationEnableDialog } from '@/components/shared/LocationEnableDialog';
+import { useAuth } from '@/store/auth';
+import {
+  distanceKm,
+  getCurrentPosition,
+  getGovernorateCenter,
+  isValidCoords,
+  NEARBY_RADIUS_KM,
+  openDeviceLocationSettings,
+  watchVisibilityAndLocate,
+  type LatLng,
+} from '@/lib/geo';
 
 type ProviderWithMeta = Profile & {
   avgRating?: number;
   reviewsCount?: number;
+  distanceKm?: number;
 };
 
 export function UserHomeTab({
@@ -22,12 +36,16 @@ export function UserHomeTab({
 }: {
   onOpenProvider: (p: Profile) => void;
 }) {
+  const { profile, updateProfile } = useAuth();
   const [providers, setProviders] = useState<ProviderWithMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [governorateFilter, setGovernorateFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const [showLocationDialog, setShowLocationDialog] = useState(false);
+  const [showNearbyMap, setShowNearbyMap] = useState(false);
 
   const loadProviders = useCallback(async () => {
     setLoading(true);
@@ -42,7 +60,6 @@ export function UserHomeTab({
       return;
     }
 
-    // Fetch reviews summary per provider (single round-trip)
     const providerIds = data.map((p) => p.id);
     let reviewsMap: Record<string, { avg: number; count: number }> = {};
     if (providerIds.length > 0) {
@@ -80,6 +97,39 @@ export function UserHomeTab({
     loadProviders();
   }, [loadProviders]);
 
+  // تهيئة موقع المستخدم من الملف أو GPS
+  useEffect(() => {
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+
+    const initLocation = async () => {
+      if (profile && isValidCoords(profile.latitude, profile.longitude)) {
+        if (!cancelled) {
+          setUserLocation({ lat: profile.latitude!, lng: profile.longitude! });
+        }
+        return;
+      }
+
+      const result = await getCurrentPosition();
+      if (cancelled) return;
+      if (result.ok) {
+        setUserLocation(result.coords);
+        if (profile) {
+          void updateProfile({
+            latitude: result.coords.lat,
+            longitude: result.coords.lng,
+          });
+        }
+      }
+    };
+
+    void initLocation();
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [profile?.id, profile?.latitude, profile?.longitude, updateProfile]);
+
   const filtered = useMemo(() => {
     let list = providers;
     if (categoryFilter !== 'all') {
@@ -96,7 +146,6 @@ export function UserHomeTab({
         getCategoryName(p.service_category ?? '').toLowerCase().includes(q)
       );
     }
-    // Sort by rating (desc), then by reviews count
     return [...list].sort((a, b) => {
       const ra = a.avgRating ?? 0;
       const rb = b.avgRating ?? 0;
@@ -105,125 +154,286 @@ export function UserHomeTab({
     });
   }, [providers, categoryFilter, governorateFilter, search]);
 
-  const hasActiveFilters = categoryFilter !== 'all' || governorateFilter !== 'all' || search.trim();
+  const hasActiveFilters = categoryFilter !== 'all' || governorateFilter !== 'all' || !!search.trim();
+
+  // عند مسح الفلاتر ارجع من شاشة الخريطة تلقائيًا
+  useEffect(() => {
+    if (!hasActiveFilters) setShowNearbyMap(false);
+  }, [hasActiveFilters]);
+
+  const nearbyProviders = useMemo(() => {
+    if (!userLocation) {
+      // بدون موقع المستخدم: أظهر من لديهم إحداثيات ضمن نتائج الفلتر
+      return filtered
+        .filter((p) => isValidCoords(p.latitude, p.longitude))
+        .map((p) => ({ ...p }));
+    }
+    return filtered
+      .filter((p) => isValidCoords(p.latitude, p.longitude))
+      .map((p) => ({
+        ...p,
+        distanceKm: distanceKm(userLocation, {
+          lat: p.latitude!,
+          lng: p.longitude!,
+        }),
+      }))
+      .filter((p) => (p.distanceKm ?? 999) <= NEARBY_RADIUS_KM)
+      .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
+  }, [filtered, userLocation]);
+
+  const mapCenter = useMemo(() => {
+    if (userLocation) return userLocation;
+    if (governorateFilter !== 'all') return getGovernorateCenter(governorateFilter);
+    if (profile?.governorate) return getGovernorateCenter(profile.governorate);
+    return getGovernorateCenter('أمانة العاصمة');
+  }, [userLocation, governorateFilter, profile?.governorate]);
+
+  const handleEnableLocation = () => {
+    openDeviceLocationSettings();
+    watchVisibilityAndLocate(async (result) => {
+      if (!result.ok) return;
+      setUserLocation(result.coords);
+      setShowLocationDialog(false);
+      if (profile) {
+        await updateProfile({
+          latitude: result.coords.lat,
+          longitude: result.coords.lng,
+        });
+      }
+    });
+    void getCurrentPosition({ maximumAge: 0 }).then(async (result) => {
+      if (!result.ok) return;
+      setUserLocation(result.coords);
+      setShowLocationDialog(false);
+      if (profile) {
+        await updateProfile({
+          latitude: result.coords.lat,
+          longitude: result.coords.lng,
+        });
+      }
+    });
+  };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Search + filter header */}
-      <div className="px-4 pt-3 pb-2 space-y-2.5 shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="relative">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="ابحث عن خدمة أو مهندس أو فني…"
-            className="pr-9 h-11 rounded-xl bg-muted/50 border-border/40"
-          />
-          {search && (
+    <div className="flex flex-col h-full min-h-0 min-w-0 overflow-x-hidden">
+      {/* شاشة الخريطة — البحث في الجوار */}
+      {showNearbyMap && hasActiveFilters ? (
+        <div className="flex flex-col h-full min-h-0">
+          <div className="shrink-0 px-3 pt-3 pb-2 flex items-center gap-2 border-b border-border/40 bg-background/95 backdrop-blur">
             <button
-              onClick={() => setSearch('')}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              type="button"
+              onClick={() => setShowNearbyMap(false)}
+              className="h-10 px-3 rounded-xl bg-muted/50 hover:bg-muted flex items-center gap-1.5 text-sm font-semibold transition-colors"
             >
-              <X className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4" />
+              تراجع
             </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant={showFilters ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setShowFilters((v) => !v)}
-            className="h-9 rounded-xl text-xs font-medium"
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5 ml-1.5" />
-            فلترة
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={loadProviders}
-            className="h-9 rounded-xl text-xs text-muted-foreground"
-          >
-            <RefreshCw className="w-3.5 h-3.5 ml-1.5" />
-            تحديث
-          </Button>
-          {hasActiveFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setCategoryFilter('all');
-                setGovernorateFilter('all');
-                setSearch('');
-              }}
-              className="h-9 rounded-xl text-xs text-muted-foreground mr-auto"
-            >
-              مسح الفلاتر
-            </Button>
-          )}
-        </div>
-
-        {showFilters && (
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="h-10 rounded-xl bg-muted/40 border-border/40 text-xs">
-                <SelectValue placeholder="المجال" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">كل المجالات</SelectItem>
-                {SERVICE_CATEGORIES.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={governorateFilter} onValueChange={setGovernorateFilter}>
-              <SelectTrigger className="h-10 rounded-xl bg-muted/40 border-border/40 text-xs">
-                <SelectValue placeholder="المحافظة" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">كل المحافظات</SelectItem>
-                {Array.from(new Set(providers.map((p) => p.governorate))).map((g) => (
-                  <SelectItem key={g} value={g}>{g}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-      </div>
-
-      {/* List */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
-        <div className="p-4 space-y-3 pb-8">
-          {loading ? (
-            <LoadingList />
-          ) : filtered.length === 0 ? (
-            <EmptyState
-              hasFilters={!!hasActiveFilters}
-              onReset={() => {
-                setCategoryFilter('all');
-                setGovernorateFilter('all');
-                setSearch('');
-              }}
-            />
-          ) : (
-            <>
-              <div className="text-xs text-muted-foreground px-1">
-                {filtered.length} مقدم خدمة
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold truncate flex items-center gap-1.5">
+                <MapPinned className="w-4 h-4 text-primary shrink-0" />
+                البحث في الجوار
               </div>
-              {filtered.map((p) => (
-                <ProviderCard
-                  key={p.id}
-                  provider={p}
-                  rating={p.avgRating}
-                  reviewsCount={p.reviewsCount}
-                  onClick={() => onOpenProvider(p)}
-                />
-              ))}
-            </>
-          )}
+              <div className="text-[11px] text-muted-foreground">
+                {nearbyProviders.length} مقدم خدمة قريب
+                {!userLocation ? ' · فعّل موقعك للدقة' : ''}
+              </div>
+            </div>
+            {!userLocation && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowLocationDialog(true)}
+                className="h-9 rounded-xl text-xs shrink-0"
+              >
+                تفعيل الموقع
+              </Button>
+            )}
+          </div>
+
+          <div className="flex-1 min-h-0 p-3 flex flex-col gap-2 overflow-hidden">
+            {!userLocation && (
+              <button
+                type="button"
+                onClick={() => setShowLocationDialog(true)}
+                className="w-full shrink-0 text-right text-xs rounded-xl border border-amber-200 bg-amber-50 text-amber-800 px-3 py-2.5"
+              >
+                فعّل موقعك لعرض أصحاب الخدمة الأقرب إليك بدقة
+              </button>
+            )}
+            <div className="flex-1 min-h-0 rounded-2xl overflow-hidden">
+              <ProvidersMap
+                providers={nearbyProviders}
+                userLocation={userLocation}
+                center={mapCenter}
+                zoom={userLocation ? 13 : 11}
+                height="100%"
+                onSelectProvider={(p) => onOpenProvider(p)}
+              />
+            </div>
+            {nearbyProviders.length === 0 && (
+              <p className="text-xs text-center text-muted-foreground py-1 shrink-0">
+                لا يوجد مقدمو خدمة بموقع مسجّل ضمن نطاق {NEARBY_RADIUS_KM} كم
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="px-4 pt-3 pb-2 space-y-2.5 shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+            <div className="relative">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ابحث عن خدمة أو مهندس أو فني…"
+                className="pr-9 h-11 rounded-xl bg-muted/50 border-border/40"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant={showFilters ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setShowFilters((v) => !v)}
+                className="h-9 rounded-xl text-xs font-medium"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 ml-1.5" />
+                فلترة
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={loadProviders}
+                className="h-9 rounded-xl text-xs text-muted-foreground"
+              >
+                <RefreshCw className="w-3.5 h-3.5 ml-1.5" />
+                تحديث
+              </Button>
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCategoryFilter('all');
+                    setGovernorateFilter('all');
+                    setSearch('');
+                  }}
+                  className="h-9 rounded-xl text-xs text-muted-foreground mr-auto"
+                >
+                  مسح الفلاتر
+                </Button>
+              )}
+            </div>
+
+            {showFilters && (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="h-10 rounded-xl bg-muted/40 border-border/40 text-xs">
+                    <SelectValue placeholder="المجال" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل المجالات</SelectItem>
+                    {SERVICE_CATEGORIES.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={governorateFilter} onValueChange={setGovernorateFilter}>
+                  <SelectTrigger className="h-10 rounded-xl bg-muted/40 border-border/40 text-xs">
+                    <SelectValue placeholder="المحافظة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل المحافظات</SelectItem>
+                    {Array.from(new Set(providers.map((p) => p.governorate))).map((g) => (
+                      <SelectItem key={g} value={g}>{g}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0 overflow-x-hidden">
+            <div className="p-4 space-y-3 pb-8">
+              {loading ? (
+                <LoadingList />
+              ) : filtered.length === 0 ? (
+                <EmptyState
+                  hasFilters={!!hasActiveFilters}
+                  onReset={() => {
+                    setCategoryFilter('all');
+                    setGovernorateFilter('all');
+                    setSearch('');
+                  }}
+                />
+              ) : hasActiveFilters ? (
+                <>
+                  <div className="flex items-center gap-2 px-0.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <List className="w-4 h-4 text-primary shrink-0" />
+                      <h3 className="text-sm font-bold">نتائج البحث</h3>
+                      <span className="text-xs text-muted-foreground">
+                        ({filtered.length})
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setShowNearbyMap(true)}
+                      className="h-9 rounded-xl text-xs font-semibold mr-auto gap-1.5"
+                    >
+                      <MapPinned className="w-3.5 h-3.5" />
+                      البحث في الجوار
+                    </Button>
+                  </div>
+                  {filtered.map((p) => (
+                    <ProviderCard
+                      key={p.id}
+                      provider={p}
+                      rating={p.avgRating}
+                      reviewsCount={p.reviewsCount}
+                      onClick={() => onOpenProvider(p)}
+                    />
+                  ))}
+                </>
+              ) : (
+                <>
+                  <div className="text-xs text-muted-foreground px-1">
+                    {filtered.length} مقدم خدمة
+                  </div>
+                  {filtered.map((p) => (
+                    <ProviderCard
+                      key={p.id}
+                      provider={p}
+                      rating={p.avgRating}
+                      reviewsCount={p.reviewsCount}
+                      onClick={() => onOpenProvider(p)}
+                    />
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      <LocationEnableDialog
+        open={showLocationDialog}
+        onOpenChange={setShowLocationDialog}
+        governorate={
+          governorateFilter !== 'all'
+            ? governorateFilter
+            : profile?.governorate || 'منطقتك'
+        }
+        onEnable={handleEnableLocation}
+      />
     </div>
   );
 }

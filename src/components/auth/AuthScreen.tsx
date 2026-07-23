@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Home, Wrench, User, Building2, ArrowRight, ArrowLeft,
+  Home, User, ArrowRight, ArrowLeft,
   Phone, Mail, Lock, MapPin, UserCircle2, Briefcase,
-  Sparkles, Shield, CheckCircle2, ChevronDown, AlertTriangle,
+  Sparkles, Shield, CheckCircle2, AlertTriangle,
   Settings, ExternalLink, Info, X, MessageCircle, Copy, Check,
+  Loader2, Navigation,
 } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { Button } from '@/components/ui/button';
@@ -16,10 +17,17 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from 'sonner';
 import { APP_NAME, APP_TAGLINE, YEMEN_GOVERNORATES, SERVICE_CATEGORIES } from '@/lib/constants';
 import type { UserRole } from '@/lib/supabase';
+import {
+  getCurrentPosition,
+  getGovernorateCenter,
+  openDeviceLocationSettings,
+  watchVisibilityAndLocate,
+  type LatLng,
+} from '@/lib/geo';
+import { LocationEnableDialog } from '@/components/shared/LocationEnableDialog';
+import { LocationPreviewMap } from '@/components/shared/ProvidersMapDynamic';
 
 type Mode = 'select' | 'login' | 'register';
 type RegisterRole = 'user' | 'provider';
@@ -301,19 +309,71 @@ function RegisterForm({
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false);
 
-  // ميزة ذكية: نسخ رقم الهاتف إلى حقل الواتساب بضغطة واحدة
-  // تظهر فقط عندما يكون رقم الهاتف معبأ ورقم الواتساب فارغ
+  const [location, setLocation] = useState<LatLng | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'ok' | 'pending' | 'denied'>('idle');
+  const [showLocationDialog, setShowLocationDialog] = useState(false);
+  const locationWatchCleanup = useRef<(() => void) | null>(null);
+
   const copyPhoneToWhatsapp = () => {
     if (phone && !whatsapp) {
       setWhatsapp(phone);
       setWhatsappCopied(true);
-      // إخفاء علامة "تم النسخ" بعد ثانيتين
       setTimeout(() => setWhatsappCopied(false), 2000);
     }
   };
 
-  // التحقق مما إذا كان يجب إظهار زر "استخدام رقم الهاتف"
-  const showCopyButton = phone && !whatsapp && phone !== whatsapp;
+  const showCopyButton = !!(phone && !whatsapp && phone !== whatsapp);
+
+  const captureLocation = useCallback(async (gov: string) => {
+    if (!gov) return;
+    setLocating(true);
+    setLocationStatus('pending');
+    const result = await getCurrentPosition({ maximumAge: 0 });
+    setLocating(false);
+    if (result.ok) {
+      setLocation(result.coords);
+      setLocationStatus('ok');
+      setShowLocationDialog(false);
+      return;
+    }
+    const center = getGovernorateCenter(gov);
+    setLocation({ lat: center.lat, lng: center.lng });
+    setLocationStatus(result.code === 'denied' || result.code === 'unavailable' ? 'denied' : 'pending');
+    setShowLocationDialog(true);
+  }, []);
+
+  const handleGovernorateChange = (gov: string) => {
+    setGovernorate(gov);
+    void captureLocation(gov);
+  };
+
+  const handleEnableLocation = () => {
+    openDeviceLocationSettings();
+    locationWatchCleanup.current?.();
+    locationWatchCleanup.current = watchVisibilityAndLocate((result) => {
+      if (result.ok) {
+        setLocation(result.coords);
+        setLocationStatus('ok');
+        setShowLocationDialog(false);
+      }
+    });
+    void getCurrentPosition({ maximumAge: 0 }).then((result) => {
+      if (result.ok) {
+        setLocation(result.coords);
+        setLocationStatus('ok');
+        setShowLocationDialog(false);
+        locationWatchCleanup.current?.();
+        locationWatchCleanup.current = null;
+      }
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      locationWatchCleanup.current?.();
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -327,6 +387,27 @@ function RegisterForm({
       setErrorBanner('الرجاء اختيار نوع الخدمة');
       return;
     }
+
+    let finalLat = location?.lat ?? null;
+    let finalLng = location?.lng ?? null;
+    let status = locationStatus;
+
+    if (status !== 'ok') {
+      const result = await getCurrentPosition({ maximumAge: 0 });
+      if (result.ok) {
+        finalLat = result.coords.lat;
+        finalLng = result.coords.lng;
+        setLocation(result.coords);
+        setLocationStatus('ok');
+        status = 'ok';
+      } else if (!finalLat || !finalLng) {
+        // احتياطي: مركز المحافظة إن رفض المستخدم التفعيل مؤقتًا
+        const center = getGovernorateCenter(governorate);
+        finalLat = center.lat;
+        finalLng = center.lng;
+      }
+    }
+
     const result = await signUp({
       email,
       password,
@@ -337,15 +418,19 @@ function RegisterForm({
       role: role as UserRole,
       bio: role === 'provider' ? bio : undefined,
       serviceCategory: role === 'provider' ? serviceCategory : undefined,
+      latitude: finalLat,
+      longitude: finalLng,
     });
     if (result.error) {
-      if ((result as any).needsEmailConfirmation) {
+      if (result.needsEmailConfirmation) {
         setNeedsEmailConfirmation(true);
       } else {
         setErrorBanner(result.error);
       }
     }
   };
+
+  const mapCenter = location ?? (governorate ? getGovernorateCenter(governorate) : null);
 
   return (
     <AuthCard
@@ -405,7 +490,6 @@ function RegisterForm({
             className="pr-10 h-12 rounded-xl bg-muted/40 border-border/60 focus:bg-card"
             dir="ltr"
           />
-          {/* زر ذكي: "استخدام نفس رقم الهاتف" — يظهر أسفل الحقل بشكل نظيف */}
           {showCopyButton && (
             <button
               type="button"
@@ -440,7 +524,7 @@ function RegisterForm({
         </Field>
 
         <Field label="المحافظة" icon={<MapPin className="w-4 h-4" />}>
-          <Select value={governorate} onValueChange={setGovernorate} required>
+          <Select value={governorate} onValueChange={handleGovernorateChange} required>
             <SelectTrigger className="h-12 rounded-xl bg-muted/40 border-border/60 focus:bg-card pr-10">
               <SelectValue placeholder="اختر المحافظة" />
             </SelectTrigger>
@@ -453,6 +537,51 @@ function RegisterForm({
             </SelectContent>
           </Select>
         </Field>
+
+        {governorate && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2 px-0.5">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Navigation className="w-3.5 h-3.5 text-primary" />
+                موقعك على الخريطة
+              </div>
+              {locating ? (
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  جاري التحديد…
+                </span>
+              ) : locationStatus === 'ok' ? (
+                <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  تم تحديد موقعك
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void captureLocation(governorate)}
+                  className="text-[11px] text-primary font-semibold"
+                >
+                  إعادة المحاولة
+                </button>
+              )}
+            </div>
+            {mapCenter && (
+              <LocationPreviewMap
+                location={mapCenter}
+                zoom={locationStatus === 'ok' ? 15 : getGovernorateCenter(governorate).zoom}
+              />
+            )}
+            {locationStatus === 'denied' && (
+              <button
+                type="button"
+                onClick={() => setShowLocationDialog(true)}
+                className="w-full text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-right"
+              >
+                الموقع غير مفعّل — اضغط لتفعيله وتحديد مكانك في {governorate}
+              </button>
+            )}
+          </div>
+        )}
 
         {role === 'provider' && (
           <>
@@ -510,9 +639,17 @@ function RegisterForm({
           دخول
         </button>
       </div>
+
+      <LocationEnableDialog
+        open={showLocationDialog}
+        onOpenChange={setShowLocationDialog}
+        governorate={governorate || 'المحافظة المختارة'}
+        onEnable={handleEnableLocation}
+      />
     </AuthCard>
   );
 }
+
 
 function AuthCard({
   title, subtitle, onBack, children,

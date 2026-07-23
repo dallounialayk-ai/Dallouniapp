@@ -432,6 +432,7 @@ export function ProviderProfileTab({
                         setServiceCategory(profile.service_category ?? '');
                         setBio(profile.bio ?? '');
                         setAvatarUrl(profile.avatar_url ?? '');
+                        setWhatsapp(profile.whatsapp_number ?? '');
                       }}
                       className="flex-1 h-10 rounded-xl"
                     >

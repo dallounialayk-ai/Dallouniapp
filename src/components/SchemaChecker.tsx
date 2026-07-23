@@ -20,6 +20,10 @@ export function SchemaChecker({ children }: { children: React.ReactNode }) {
         setStatus('missing');
       } else if (error && (error.code === '42P01' || error.message.includes('does not exist'))) {
         setStatus('missing');
+      } else if (error) {
+        // Unexpected DB/auth/config error — treat as missing so SetupWizard can guide the user
+        console.error('SchemaChecker error:', error);
+        setStatus('missing');
       } else {
         setStatus('ok');
       }
@@ -67,6 +71,9 @@ create table if not exists public.profiles (
   avatar_url text,
   bio text,
   service_category text,
+  whatsapp_number text,
+  latitude double precision,
+  longitude double precision,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -80,6 +87,9 @@ create table if not exists public.service_requests (
   description text not null,
   governorate text not null,
   status text not null check (status in ('open','closed')) default 'open',
+  latitude double precision,
+  longitude double precision,
+  location_label text,
   created_at timestamptz not null default now()
 );
 
@@ -380,7 +390,7 @@ function SetupWizard({ onRetry }: { onRetry: () => void }) {
               <BookOpen className="w-3.5 h-3.5" />
               عرض كود SQL الكامل
             </summary>
-            <pre className="text-[10px] leading-relaxed p-3 pt-0 overflow-x-auto max-h-72 text-muted-foreground font-mono" dir="ltr">
+            <pre className="text-[10px] leading-relaxed p-3 pt-0 overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-all max-h-72 text-muted-foreground font-mono" dir="ltr">
 {SQL_SETUP}
             </pre>
           </details>

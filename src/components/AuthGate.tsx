@@ -27,8 +27,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             .select('*')
             .eq('id', data.session.user.id)
             .single();
-          if (mounted && profileData) {
-            setProfile(profileData as any);
+          if (mounted) {
+            // Clear stale persisted profile if fetch fails
+            setProfile(profileData ? (profileData as any) : null);
           }
         } else {
           if (mounted) setProfile(null);
@@ -51,7 +52,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           .select('*')
           .eq('id', session.user.id)
           .single();
-        if (profileData) setProfile(profileData as any);
+        setProfile(profileData ? (profileData as any) : null);
       }
     });
 

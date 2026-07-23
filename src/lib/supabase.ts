@@ -1,7 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY. Copy .env.example to .env and fill in your Supabase keys.'
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -24,6 +30,8 @@ export type Profile = {
   avatar_url: string | null;
   bio: string | null;
   service_category: string | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string;
 };
 
@@ -35,6 +43,9 @@ export type ServiceRequest = {
   description: string;
   governorate: string;
   status: 'open' | 'closed';
+  latitude: number | null;
+  longitude: number | null;
+  location_label: string | null;
   created_at: string;
   profile?: Profile;
   offers_count?: number;

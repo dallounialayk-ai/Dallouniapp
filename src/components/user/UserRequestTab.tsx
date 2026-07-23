@@ -1,7 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { Send, CheckCircle2, Plus, ListChecks } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Send, CheckCircle2, Plus, ListChecks, MapPin, Clock,
+  Navigation, Loader2,
+} from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -15,7 +18,16 @@ import { useAuth } from '@/store/auth';
 import { SERVICE_CATEGORIES, YEMEN_GOVERNORATES, getCategoryName } from '@/lib/constants';
 import { formatRelativeTime } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Clock } from 'lucide-react';
+import {
+  getCurrentPosition,
+  getGovernorateCenter,
+  openDeviceLocationSettings,
+  reverseGeocode,
+  watchVisibilityAndLocate,
+  type LatLng,
+} from '@/lib/geo';
+import { LocationEnableDialog } from '@/components/shared/LocationEnableDialog';
+import { LocationPreviewMap } from '@/components/shared/ProvidersMapDynamic';
 
 export function UserRequestTab({
   onOpenRequest,
@@ -33,6 +45,82 @@ export function UserRequestTab({
   const [myRequests, setMyRequests] = useState<ServiceRequest[]>([]);
   const [loadingList, setLoadingList] = useState(false);
   const [showList, setShowList] = useState(false);
+
+  const [location, setLocation] = useState<LatLng | null>(null);
+  const [locationLabel, setLocationLabel] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'ok' | 'pending' | 'denied'>('idle');
+  const [showLocationDialog, setShowLocationDialog] = useState(false);
+  const locationWatchCleanup = useRef<(() => void) | null>(null);
+  const didInitGov = useRef(false);
+
+  useEffect(() => {
+    if (showList && refreshKey !== undefined) {
+      loadMyRequests();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
+
+  const applyExactLocation = useCallback(async (coords: LatLng, gov: string) => {
+    setLocation(coords);
+    setLocationStatus('ok');
+    setShowLocationDialog(false);
+    const label = await reverseGeocode(coords.lat, coords.lng, gov);
+    setLocationLabel(label);
+  }, []);
+
+  const captureLocation = useCallback(async (gov: string) => {
+    if (!gov) return;
+    setLocating(true);
+    setLocationStatus('pending');
+    const result = await getCurrentPosition({ maximumAge: 0 });
+    setLocating(false);
+    if (result.ok) {
+      await applyExactLocation(result.coords, gov);
+      return;
+    }
+    const center = getGovernorateCenter(gov);
+    setLocation({ lat: center.lat, lng: center.lng });
+    setLocationLabel(gov);
+    setLocationStatus(result.code === 'denied' || result.code === 'unavailable' ? 'denied' : 'pending');
+    setShowLocationDialog(true);
+  }, [applyExactLocation]);
+
+  // سحب الموقع تلقائيًا إن كانت المحافظة مملوءة من الملف الشخصي
+  useEffect(() => {
+    if (didInitGov.current) return;
+    if (!governorate) return;
+    didInitGov.current = true;
+    void captureLocation(governorate);
+  }, [governorate, captureLocation]);
+
+  const handleGovernorateChange = (gov: string) => {
+    setGovernorate(gov);
+    void captureLocation(gov);
+  };
+
+  const handleEnableLocation = () => {
+    openDeviceLocationSettings();
+    locationWatchCleanup.current?.();
+    locationWatchCleanup.current = watchVisibilityAndLocate((result) => {
+      if (result.ok && governorate) {
+        void applyExactLocation(result.coords, governorate);
+      }
+    });
+    void getCurrentPosition({ maximumAge: 0 }).then((result) => {
+      if (result.ok && governorate) {
+        void applyExactLocation(result.coords, governorate);
+        locationWatchCleanup.current?.();
+        locationWatchCleanup.current = null;
+      }
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      locationWatchCleanup.current?.();
+    };
+  }, []);
 
   const loadMyRequests = async () => {
     if (!profile) return;
@@ -64,6 +152,28 @@ export function UserRequestTab({
       toast.error('الرجاء اختيار المحافظة');
       return;
     }
+
+    let finalLat = location?.lat ?? null;
+    let finalLng = location?.lng ?? null;
+    let finalLabel = locationLabel;
+
+    if (locationStatus !== 'ok') {
+      const result = await getCurrentPosition({ maximumAge: 0 });
+      if (result.ok) {
+        finalLat = result.coords.lat;
+        finalLng = result.coords.lng;
+        finalLabel = await reverseGeocode(finalLat, finalLng, governorate);
+        setLocation(result.coords);
+        setLocationLabel(finalLabel);
+        setLocationStatus('ok');
+      } else if (!finalLat || !finalLng) {
+        const center = getGovernorateCenter(governorate);
+        finalLat = center.lat;
+        finalLng = center.lng;
+        finalLabel = governorate;
+      }
+    }
+
     setSubmitting(true);
     const { data, error } = await supabase
       .from('service_requests')
@@ -73,6 +183,9 @@ export function UserRequestTab({
         title: title.trim(),
         description: description.trim(),
         governorate,
+        latitude: finalLat,
+        longitude: finalLng,
+        location_label: finalLabel,
       })
       .select('*')
       .single();
@@ -83,7 +196,6 @@ export function UserRequestTab({
       return;
     }
 
-    // Notify matching providers (those with same category) - via RPC to bypass RLS
     const { data: providers } = await supabase
       .from('profiles')
       .select('id')
@@ -107,6 +219,8 @@ export function UserRequestTab({
     setSubmitting(false);
     if (showList) loadMyRequests();
   };
+
+  const mapCenter = location ?? (governorate ? getGovernorateCenter(governorate) : null);
 
   return (
     <div className="flex flex-col h-full">
@@ -161,7 +275,7 @@ export function UserRequestTab({
                       </Badge>
                       <span className="flex items-center gap-0.5">
                         <MapPin className="w-2.5 h-2.5" />
-                        {r.governorate}
+                        {r.location_label || r.governorate}
                       </span>
                       <span className="flex items-center gap-0.5">
                         <Clock className="w-2.5 h-2.5" />
@@ -174,7 +288,6 @@ export function UserRequestTab({
             </div>
           ) : (
             <div className="space-y-4 animate-fade-rise">
-              {/* Hero */}
               <div className="bg-gradient-to-br from-primary/10 to-accent/30 rounded-2xl p-4 border border-primary/10">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shrink-0">
@@ -231,7 +344,7 @@ export function UserRequestTab({
 
               <div>
                 <Label className="text-xs font-medium text-muted-foreground">المحافظة *</Label>
-                <Select value={governorate} onValueChange={setGovernorate}>
+                <Select value={governorate} onValueChange={handleGovernorateChange}>
                   <SelectTrigger className="mt-1 h-12 rounded-xl bg-muted/40 border-border/60">
                     <SelectValue placeholder="اختر المحافظة" />
                   </SelectTrigger>
@@ -242,6 +355,57 @@ export function UserRequestTab({
                   </SelectContent>
                 </Select>
               </div>
+
+              {governorate && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <Navigation className="w-3.5 h-3.5 text-primary" />
+                      موقع البناء / الخدمة
+                    </div>
+                    {locating ? (
+                      <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        جاري التحديد…
+                      </span>
+                    ) : locationStatus === 'ok' ? (
+                      <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        تم تحديد الموقع
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void captureLocation(governorate)}
+                        className="text-[11px] text-primary font-semibold"
+                      >
+                        إعادة المحاولة
+                      </button>
+                    )}
+                  </div>
+                  {mapCenter && (
+                    <LocationPreviewMap
+                      location={mapCenter}
+                      zoom={locationStatus === 'ok' ? 15 : getGovernorateCenter(governorate).zoom}
+                    />
+                  )}
+                  {locationLabel && locationStatus === 'ok' && (
+                    <p className="text-[11px] text-muted-foreground px-0.5 flex items-start gap-1">
+                      <MapPin className="w-3 h-3 mt-0.5 shrink-0 text-primary" />
+                      <span>{locationLabel}</span>
+                    </p>
+                  )}
+                  {locationStatus === 'denied' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowLocationDialog(true)}
+                      className="w-full text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-right"
+                    >
+                      الموقع غير مفعّل — اضغط لتفعيله وتحديد مكان البناء في {governorate}
+                    </button>
+                  )}
+                </div>
+              )}
 
               <Button
                 onClick={handleSubmit}
@@ -271,6 +435,13 @@ export function UserRequestTab({
           )}
         </div>
       </div>
+
+      <LocationEnableDialog
+        open={showLocationDialog}
+        onOpenChange={setShowLocationDialog}
+        governorate={governorate || 'المحافظة المختارة'}
+        onEnable={handleEnableLocation}
+      />
     </div>
   );
 }
