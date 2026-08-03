@@ -39,10 +39,14 @@ export function ProviderApp() {
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0 w-full overflow-x-hidden bg-background">
       <header className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40">
-        <div>
-          <div className="text-[10px] text-muted-foreground">دلّوني عليك</div>
-          <div className="font-bold text-base leading-tight">
-            {tab === 'home' ? 'طلبات الخدمة' : 'الملف الشخصي'}
+        <div className="flex items-center gap-2.5 min-w-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="" width={36} height={36} className="w-9 h-9 object-contain shrink-0" />
+          <div className="min-w-0">
+            <div className="text-[10px] text-muted-foreground">دلّوني عليك</div>
+            <div className="font-bold text-base leading-tight">
+              {tab === 'home' ? 'طلبات الخدمة' : 'الملف الشخصي'}
+            </div>
           </div>
         </div>
         <button

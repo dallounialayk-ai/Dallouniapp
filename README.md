@@ -8,6 +8,7 @@
 - Supabase (Auth + Postgres + Realtime + Storage)
 - Leaflet / OpenStreetMap للخرائط والموقع
 - Zustand لإدارة الحالة
+- Capacitor (غلاف Android لـ Google Play يفتح نشر Vercel)
 
 ## التشغيل المحلي
 
@@ -15,6 +16,7 @@
 npm install
 cp .env.example .env
 # عبّئ NEXT_PUBLIC_SUPABASE_URL و NEXT_PUBLIC_SUPABASE_ANON_KEY
+# بعد نشر Vercel عبّئ أيضاً NEXT_PUBLIC_APP_URL
 npm run dev
 ```
 
@@ -34,12 +36,25 @@ npm run dev
 ## أوامر مفيدة
 
 ```bash
-npm run build   # بناء الإنتاج
-npm run start   # تشغيل البناء
-npm run lint    # فحص ESLint
+npm run build              # بناء الإنتاج
+npm run start              # تشغيل البناء
+npm run lint               # فحص ESLint
+npm run cap:sync           # مزامنة مشروع Android (Capacitor)
+npm run cap:open:android   # فتح Android Studio
 ```
+
+## Google Play
+
+التطبيق جاهز كغلاف Capacitor (`com.dallounialayk.app`) يفتح رابط Vercel.
+
+1. انشر على Vercel وعيّن `NEXT_PUBLIC_APP_URL`
+2. نفّذ `npm run cap:sync` ثم ابنِ Signed App Bundle من Android Studio
+3. اربط سياسة الخصوصية: `https://<vercel-url>/privacy`
+
+التفاصيل الكاملة: [docs/google-play.md](docs/google-play.md)
 
 ## ملاحظات أمنية
 
 - لا ترفع ملف `.env` إلى GitHub (موجود في `.gitignore`)
 - استخدم `.env.example` كقالب فقط
+- لا ترفع ملفات التوقيع (`*.keystore`, `keystore.properties`)

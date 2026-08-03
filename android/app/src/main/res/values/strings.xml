@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">دلّوني عليك</string>
+    <string name="title_activity_main">دلّوني عليك</string>
+    <string name="package_name">com.dallounialayk.app</string>
+    <string name="custom_url_scheme">com.dallounialayk.app</string>
+    <string name="permission_location_rationale">نستخدم موقعك لعرض مقدمي الخدمات القريبين وتحسين طلبات الخدمة.</string>
+    <string name="permission_camera_rationale">نستخدم الكاميرا لرفع صورة الملف الشخصي وأعمال سابقة.</string>
+    <string name="permission_photos_rationale">نحتاج الوصول للصور لرفع صورة الملف الشخصي والمعرض.</string>
+</resources>

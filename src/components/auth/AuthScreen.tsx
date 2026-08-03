@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Home, User, ArrowRight, ArrowLeft,
+  User, ArrowRight, ArrowLeft,
   Phone, Mail, Lock, MapPin, UserCircle2, Briefcase,
   Sparkles, Shield, CheckCircle2, AlertTriangle,
   Settings, ExternalLink, Info, X, MessageCircle, Copy, Check,
@@ -116,11 +116,15 @@ export function AuthScreen() {
 function BrandMark() {
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center elevate-2">
-        <Home className="w-8 h-8 text-white" strokeWidth={2.2} />
-        <div className="absolute -bottom-1 -left-1 w-6 h-6 rounded-full bg-white elevate-1 flex items-center justify-center">
-          <Sparkles className="w-3.5 h-3.5 text-primary" strokeWidth={2.5} />
-        </div>
+      <div className="relative w-[108px] h-[108px] rounded-[26px] bg-white border border-border/50 elevate-2 flex items-center justify-center overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo.png"
+          alt={APP_NAME}
+          width={96}
+          height={96}
+          className="object-contain p-1"
+        />
       </div>
       <div className="text-center">
         <h1 className="text-2xl font-bold tracking-tight">{APP_NAME}</h1>

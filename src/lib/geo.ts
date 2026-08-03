@@ -80,7 +80,71 @@ export function isValidCoords(lat?: number | null, lng?: number | null): boolean
 }
 
 export function getCurrentPosition(options?: PositionOptions): Promise<LocationResult> {
-  if (typeof window === 'undefined' || !navigator.geolocation) {
+  if (typeof window === 'undefined') {
+    return Promise.resolve({
+      ok: false,
+      code: 'unsupported',
+      message: 'جهازك لا يدعم تحديد الموقع',
+    });
+  }
+
+  // على Android/iOS داخل Capacitor نفضّل الـ plugin الأصلي لطلب الإذن بشكل صحيح
+  return getCurrentPositionNativeOrWeb(options);
+}
+
+async function getCurrentPositionNativeOrWeb(
+  options?: PositionOptions
+): Promise<LocationResult> {
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    if (Capacitor.isNativePlatform()) {
+      const { Geolocation } = await import('@capacitor/geolocation');
+      try {
+        const permission = await Geolocation.requestPermissions();
+        const loc = permission.location ?? permission.coarseLocation;
+        if (loc === 'denied') {
+          return {
+            ok: false,
+            code: 'denied',
+            message: 'تم رفض إذن الموقع',
+          };
+        }
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: options?.enableHighAccuracy ?? true,
+          timeout: options?.timeout ?? 15000,
+          maximumAge: options?.maximumAge ?? 30_000,
+        });
+        return {
+          ok: true,
+          coords: {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          },
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/denied|permission/i.test(msg)) {
+          return { ok: false, code: 'denied', message: 'تم رفض إذن الموقع' };
+        }
+        if (/timeout/i.test(msg)) {
+          return { ok: false, code: 'timeout', message: 'انتهت مهلة تحديد الموقع' };
+        }
+        return {
+          ok: false,
+          code: 'unavailable',
+          message: 'خدمة الموقع غير مفعّلة على الجهاز',
+        };
+      }
+    }
+  } catch {
+    // سقوط إلى مسار الويب
+  }
+
+  return getCurrentPositionWeb(options);
+}
+
+function getCurrentPositionWeb(options?: PositionOptions): Promise<LocationResult> {
+  if (!navigator.geolocation) {
     return Promise.resolve({
       ok: false,
       code: 'unsupported',

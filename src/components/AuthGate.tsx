@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
+import { SplashScreen } from '@/components/SplashScreen';
 
 /**
  * Initializes the auth state on mount and keeps it in sync with Supabase session.
@@ -11,7 +12,6 @@ import { useAuth } from '@/store/auth';
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const setProfile = useAuth((s) => s.setProfile);
   const setInitialized = useAuth((s) => s.setInitialized);
-  const profile = useAuth((s) => s.profile);
   const initialized = useAuth((s) => s.initialized);
 
   useEffect(() => {
@@ -63,16 +63,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (!initialized) {
-    return (
-      <div className="h-full flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          </div>
-          <p className="text-sm text-muted-foreground">جاري التحميل…</p>
-        </div>
-      </div>
-    );
+    return <SplashScreen message="جاري تجهيز حسابك…" />;
   }
 
   return <>{children}</>;

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Database, Copy, Check, AlertTriangle, RefreshCw, ExternalLink, BookOpen } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { SplashScreen } from '@/components/SplashScreen';
 
 type Status = 'checking' | 'ok' | 'missing';
 
@@ -37,16 +38,7 @@ export function SchemaChecker({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (status === 'checking') {
-    return (
-      <div className="h-full flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          </div>
-          <p className="text-sm text-muted-foreground">جاري فحص الاتصال بقاعدة البيانات…</p>
-        </div>
-      </div>
-    );
+    return <SplashScreen message="جاري الاتصال بقاعدة البيانات…" />;
   }
 
   if (status === 'ok') return <>{children}</>;

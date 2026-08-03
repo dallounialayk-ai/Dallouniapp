@@ -47,6 +47,20 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Android / Capacitor signing secrets (never commit)
+*.keystore
+*.jks
+keystore.properties
+android/key.properties
+android/app/release/
+android/.gradle/
+android/local.properties
+android/captures/
+android/.idea/
+*.apk
+*.aab
+*.ap_
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

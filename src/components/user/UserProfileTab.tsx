@@ -471,8 +471,16 @@ export function UserProfileTab({
             تسجيل الخروج
           </Button>
 
-          <div className="text-center text-[10px] text-muted-foreground/70">
-            {APP_NAME} • الإصدار 1.0
+          <div className="text-center space-y-1">
+            <a
+              href="/privacy"
+              className="text-xs text-primary font-medium underline-offset-2 hover:underline"
+            >
+              سياسة الخصوصية
+            </a>
+            <div className="text-[10px] text-muted-foreground/70">
+              {APP_NAME} • الإصدار 0.2.0
+            </div>
           </div>
         </div>
       </div>
