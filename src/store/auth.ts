@@ -89,6 +89,27 @@ export const useAuth = create<AuthState>()(
             if (data.latitude != null) updateData.latitude = data.latitude;
             if (data.longitude != null) updateData.longitude = data.longitude;
 
+            if (data.role === 'provider') {
+              const { data: setting } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'provider_approval_required')
+                .maybeSingle();
+              const raw = setting?.value;
+              const needsApproval =
+                raw === true ||
+                raw === 'true' ||
+                (typeof raw === 'object' && raw !== null && String(raw) === 'true');
+              // jsonb boolean يأتي كـ boolean من supabase-js عادة
+              const required =
+                typeof raw === 'boolean'
+                  ? raw
+                  : typeof raw === 'string'
+                    ? raw === 'true'
+                    : needsApproval;
+              if (required) updateData.is_approved = false;
+            }
+
             await supabase
               .from('profiles')
               .update(updateData)

@@ -33,6 +33,10 @@ export type Profile = {
   latitude: number | null;
   longitude: number | null;
   created_at: string;
+  is_approved?: boolean;
+  is_blocked?: boolean;
+  rating_override?: number | null;
+  rating_override_note?: string | null;
 };
 
 export type ServiceRequest = {
@@ -81,6 +85,9 @@ export type Report = {
   reason: string;
   comment: string;
   created_at: string;
+  status?: 'pending' | 'reviewed' | 'resolved' | 'dismissed';
+  admin_note?: string | null;
+  resolved_at?: string | null;
 };
 
 export type Message = {

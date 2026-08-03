@@ -43,6 +43,18 @@ npm run cap:sync           # مزامنة مشروع Android (Capacitor)
 npm run cap:open:android   # فتح Android Studio
 ```
 
+## لوحة التحكم (Admin)
+
+بعد ضبط المتغيرات في `.env` / Vercel:
+
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- نفّذ `download/admin-features.sql` في Supabase SQL Editor
+
+افتح: `/admin`
+
+التفاصيل: إحصائيات، مستخدمون/مهن، إشعارات، بلاغات، موافقة مقدمي الخدمة، تصدير CSV/Excel.
+
 ## Google Play
 
 التطبيق جاهز كغلاف Capacitor (`com.dallounialayk.app`) يفتح رابط Vercel.

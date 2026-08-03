@@ -53,6 +53,8 @@ export function UserHomeTab({
       .from('profiles')
       .select('*')
       .eq('role', 'provider')
+      .neq('is_blocked', true)
+      .neq('is_approved', false)
       .order('created_at', { ascending: false });
 
     if (!data) {
@@ -83,11 +85,18 @@ export function UserHomeTab({
       }
     }
 
-    const merged: ProviderWithMeta[] = data.map((p) => ({
-      ...(p as Profile),
-      avgRating: reviewsMap[p.id]?.avg ?? 0,
-      reviewsCount: reviewsMap[p.id]?.count ?? 0,
-    }));
+    const merged: ProviderWithMeta[] = data.map((p) => {
+      const profile = p as Profile;
+      const avgFromReviews = reviewsMap[p.id]?.avg ?? 0;
+      const count = reviewsMap[p.id]?.count ?? 0;
+      const override =
+        typeof profile.rating_override === 'number' ? profile.rating_override : null;
+      return {
+        ...profile,
+        avgRating: override != null ? override : avgFromReviews,
+        reviewsCount: override != null && count === 0 ? 1 : count,
+      };
+    });
 
     setProviders(merged);
     setLoading(false);
