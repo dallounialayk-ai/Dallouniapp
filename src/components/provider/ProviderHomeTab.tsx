@@ -10,7 +10,14 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase, type ServiceRequest, type Profile } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
-import { SERVICE_CATEGORIES, YEMEN_GOVERNORATES, getCategoryName } from '@/lib/constants';
+import {
+  YEMEN_GOVERNORATES,
+  getCategoryName,
+  getCategoryPath,
+  getCategoryGroupId,
+  matchesCategoryFilter,
+} from '@/lib/constants';
+import { ServiceCategoryPicker } from '@/components/shared/ServiceCategoryPicker';
 import { RequestCard } from '@/components/shared/RequestCard';
 
 export function ProviderHomeTab({
@@ -19,14 +26,28 @@ export function ProviderHomeTab({
   onOpenRequest: (r: ServiceRequest, owner?: Profile) => void;
 }) {
   const { profile } = useAuth();
+  const defaultCategory = getCategoryGroupId(profile?.service_category) ?? 'all';
+  const defaultGovernorate = profile?.governorate || 'all';
+
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [owners, setOwners] = useState<Record<string, Profile>>({});
   const [offersCount, setOffersCount] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [governorateFilter, setGovernorateFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>(defaultCategory);
+  const [governorateFilter, setGovernorateFilter] = useState<string>(defaultGovernorate);
   const [showFilters, setShowFilters] = useState(false);
+  const [defaultsReady, setDefaultsReady] = useState(false);
+
+  // مزامنة الافتراضي عند جاهزية الملف الشخصي
+  useEffect(() => {
+    if (!profile || defaultsReady) return;
+    const main = getCategoryGroupId(profile.service_category) ?? 'all';
+    const gov = profile.governorate || 'all';
+    setCategoryFilter(main);
+    setGovernorateFilter(gov);
+    setDefaultsReady(true);
+  }, [profile, defaultsReady]);
 
   const load = useCallback(async () => {
     if (!profile) return;
@@ -37,8 +58,12 @@ export function ProviderHomeTab({
       .eq('status', 'open')
       .order('created_at', { ascending: false });
 
-    const reqs = (data ?? []) as (ServiceRequest & { profile: Profile })[];
-    setRequests(reqs.map(({ profile, ...r }) => r));
+    const now = Date.now();
+    const reqs = ((data ?? []) as (ServiceRequest & { profile: Profile })[]).filter((r) => {
+      if (!r.expires_at) return true;
+      return new Date(r.expires_at).getTime() > now;
+    });
+    setRequests(reqs.map(({ profile: _p, ...r }) => r));
 
     const ownerMap: Record<string, Profile> = {};
     reqs.forEach((r) => {
@@ -46,7 +71,6 @@ export function ProviderHomeTab({
     });
     setOwners(ownerMap);
 
-    // Count offers per request
     if (reqs.length > 0) {
       const { data: offers } = await supabase
         .from('offers')
@@ -57,6 +81,8 @@ export function ProviderHomeTab({
         counts[o.request_id] = (counts[o.request_id] ?? 0) + 1;
       });
       setOffersCount(counts);
+    } else {
+      setOffersCount({});
     }
 
     setLoading(false);
@@ -66,7 +92,6 @@ export function ProviderHomeTab({
     load();
   }, [load]);
 
-  // Realtime subscribe for new requests
   useEffect(() => {
     const channel = supabase
       .channel('provider-requests')
@@ -86,17 +111,9 @@ export function ProviderHomeTab({
 
   const filtered = useMemo(() => {
     let list = requests;
-    // Default: prioritize requests matching provider's category
-    if (profile?.service_category && categoryFilter === 'all') {
-      list = [...list].sort((a, b) => {
-        const aMatch = a.category === profile.service_category ? 0 : 1;
-        const bMatch = b.category === profile.service_category ? 0 : 1;
-        if (aMatch !== bMatch) return aMatch - bMatch;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
-    }
+
     if (categoryFilter !== 'all') {
-      list = list.filter((r) => r.category === categoryFilter);
+      list = list.filter((r) => matchesCategoryFilter(r.category, categoryFilter));
     }
     if (governorateFilter !== 'all') {
       list = list.filter((r) => r.governorate === governorateFilter);
@@ -106,24 +123,57 @@ export function ProviderHomeTab({
       list = list.filter((r) =>
         r.title.toLowerCase().includes(q) ||
         r.description.toLowerCase().includes(q) ||
-        getCategoryName(r.category).toLowerCase().includes(q)
+        getCategoryName(r.category).toLowerCase().includes(q) ||
+        getCategoryPath(r.category).toLowerCase().includes(q)
       );
     }
-    return list;
-  }, [requests, categoryFilter, governorateFilter, search, profile]);
 
-  const hasActiveFilters = categoryFilter !== 'all' || governorateFilter !== 'all' || search.trim();
+    // الأقرب لانتهاء المهلة أولاً
+    return [...list].sort((a, b) => {
+      const ae = a.expires_at ? new Date(a.expires_at).getTime() : Number.POSITIVE_INFINITY;
+      const be = b.expires_at ? new Date(b.expires_at).getTime() : Number.POSITIVE_INFINITY;
+      if (ae !== be) return ae - be;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [requests, categoryFilter, governorateFilter, search]);
+
+  const isDefaultView =
+    categoryFilter === defaultCategory &&
+    governorateFilter === defaultGovernorate &&
+    !search.trim();
+
+  const hasCustomFilters = !isDefaultView;
+
+  const resetToDefaults = () => {
+    setCategoryFilter(defaultCategory);
+    setGovernorateFilter(defaultGovernorate);
+    setSearch('');
+  };
+
+  const showAll = () => {
+    setCategoryFilter('all');
+    setGovernorateFilter('all');
+    setSearch('');
+  };
+
+  const mainName = defaultCategory !== 'all' ? getCategoryName(defaultCategory) : null;
 
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 pt-3 pb-2 space-y-2.5 shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        {profile?.service_category && (
-          <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/15 rounded-xl px-3 py-2 text-xs">
-            <span className="text-muted-foreground">مجالك: </span>
-            <span className="font-semibold text-emerald-700">
-              {getCategoryName(profile.service_category)}
-            </span>
-            <span className="text-muted-foreground mr-2"> • نعرض طلبات مجالك أولًا</span>
+        {(mainName || defaultGovernorate !== 'all') && (
+          <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/15 rounded-xl px-3 py-2 text-xs leading-relaxed">
+            <span className="text-muted-foreground">الافتراضي: </span>
+            {mainName && (
+              <span className="font-semibold text-emerald-700">مجال {mainName}</span>
+            )}
+            {defaultGovernorate !== 'all' && (
+              <>
+                {mainName ? <span className="text-muted-foreground"> · </span> : null}
+                <span className="font-semibold text-emerald-700">{defaultGovernorate}</span>
+              </>
+            )}
+            <span className="text-muted-foreground"> · مرتّب بأقرب مهلة انتهاء</span>
           </div>
         )}
         <div className="relative">
@@ -144,7 +194,7 @@ export function ProviderHomeTab({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant={showFilters ? 'default' : 'outline'}
             size="sm"
@@ -163,35 +213,38 @@ export function ProviderHomeTab({
             <RefreshCw className="w-3.5 h-3.5 ml-1.5" />
             تحديث
           </Button>
-          {hasActiveFilters && (
+          {hasCustomFilters && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setCategoryFilter('all');
-                setGovernorateFilter('all');
-                setSearch('');
-              }}
+              onClick={resetToDefaults}
               className="h-9 rounded-xl text-xs text-muted-foreground mr-auto"
             >
-              مسح الفلاتر
+              الافتراضي
+            </Button>
+          )}
+          {isDefaultView && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={showAll}
+              className="h-9 rounded-xl text-xs text-muted-foreground mr-auto"
+            >
+              عرض الكل
             </Button>
           )}
         </div>
 
         {showFilters && (
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="h-10 rounded-xl bg-muted/40 border-border/40 text-xs">
-                <SelectValue placeholder="المجال" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">كل المجالات</SelectItem>
-                {SERVICE_CATEGORIES.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 gap-2 pt-1">
+            <ServiceCategoryPicker
+              value={categoryFilter}
+              onChange={setCategoryFilter}
+              mode="filter"
+              allowAll
+              placeholder="كل المجالات"
+              triggerClassName="w-full h-10 rounded-xl bg-muted/40 border border-border/40 px-3 text-xs text-right flex items-center justify-between gap-2"
+            />
             <Select value={governorateFilter} onValueChange={setGovernorateFilter}>
               <SelectTrigger className="h-10 rounded-xl bg-muted/40 border-border/40 text-xs">
                 <SelectValue placeholder="المحافظة" />
@@ -212,15 +265,15 @@ export function ProviderHomeTab({
           {loading ? (
             <LoadingList />
           ) : filtered.length === 0 ? (
-            <EmptyState hasFilters={!!hasActiveFilters} onReset={() => {
-              setCategoryFilter('all');
-              setGovernorateFilter('all');
-              setSearch('');
-            }} />
+            <EmptyState
+              hasFilters={hasCustomFilters || isDefaultView}
+              onReset={hasCustomFilters ? resetToDefaults : showAll}
+            />
           ) : (
             <>
               <div className="text-xs text-muted-foreground px-1">
                 {filtered.length} طلب مفتوح
+                {isDefaultView ? ' في نطاقك' : ''}
               </div>
               {filtered.map((r) => (
                 <RequestCard
@@ -267,7 +320,9 @@ function EmptyState({ hasFilters, onReset }: { hasFilters: boolean; onReset: () 
       </div>
       <p className="text-sm font-medium text-foreground">لا توجد طلبات حاليًا</p>
       <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-        {hasFilters ? 'جرّب تعديل الفلاتر' : 'تابع التطبيق، ستظهر الطلبات الجديدة فور نشرها'}
+        {hasFilters
+          ? 'لا توجد طلبات ضمن مجالك ومحافظتك — جرّب «عرض الكل» أو عدّل الفلاتر'
+          : 'تابع التطبيق، ستظهر الطلبات الجديدة فور نشرها'}
       </p>
       {hasFilters && (
         <Button
@@ -276,7 +331,7 @@ function EmptyState({ hasFilters, onReset }: { hasFilters: boolean; onReset: () 
           onClick={onReset}
           className="mt-3 h-9 rounded-xl text-xs"
         >
-          مسح الفلاتر
+          تعديل العرض
         </Button>
       )}
     </div>

@@ -20,10 +20,12 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase, type ServiceRequest, type Profile, type Offer } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
-import { getCategoryName } from '@/lib/constants';
+import { getCategoryName, getCategoryPath } from '@/lib/constants';
 import { getInitials, formatRelativeTime, formatCurrency } from '@/lib/utils';
 import { isValidCoords, reverseGeocode, getGovernorateCenter } from '@/lib/geo';
 import { RequestLocationMap } from '@/components/shared/ProvidersMapDynamic';
+import { VerifiedBadge } from '@/components/shared/VerifiedBadge';
+import { fetchProviderVerification } from '@/lib/verification';
 
 export function RequestDetailSheet({
   request, requestOwner, open, onOpenChange, onOpenChat, onOfferSubmitted,
@@ -355,7 +357,7 @@ export function RequestDetailSheet({
                 <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
                   <Badge variant="secondary" className="font-medium flex items-center gap-1">
                     <Tag className="w-2.5 h-2.5" />
-                    {getCategoryName(activeRequest.category)}
+                    {getCategoryPath(activeRequest.category)}
                   </Badge>
                   <span className="flex items-center gap-1 text-muted-foreground">
                     <MapPin className="w-2.5 h-2.5" />
@@ -613,6 +615,15 @@ function OfferCard({
   onReject: () => void;
   onChat: () => void;
 }) {
+  const [verified, setVerified] = useState(false);
+
+  useEffect(() => {
+    if (!offer.provider_id) return;
+    void fetchProviderVerification(offer.provider_id, offer.profile?.admin_verified).then((r) => {
+      setVerified(r.verified);
+    });
+  }, [offer.provider_id, offer.profile?.admin_verified]);
+
   return (
     <div className="bg-card border border-border/60 rounded-2xl p-3 elevate-1">
       <div className="flex items-start gap-3">
@@ -624,7 +635,10 @@ function OfferCard({
         </Avatar>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <div className="font-semibold text-sm truncate">{offer.profile?.full_name}</div>
+            <div className="font-semibold text-sm truncate inline-flex items-center gap-1 max-w-full">
+              <span className="truncate">{offer.profile?.full_name}</span>
+              <VerifiedBadge verified={verified} size="sm" />
+            </div>
             {offer.price && (
               <div className="text-primary font-bold text-sm shrink-0">
                 {formatCurrency(offer.price)}

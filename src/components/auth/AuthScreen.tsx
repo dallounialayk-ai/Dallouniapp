@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, ArrowRight, ArrowLeft,
-  Phone, Mail, Lock, MapPin, UserCircle2, Briefcase,
+  Phone, Lock, MapPin, UserCircle2, Briefcase,
   Sparkles, Shield, CheckCircle2, AlertTriangle,
   Settings, ExternalLink, Info, X, MessageCircle, Copy, Check,
   Loader2, Navigation,
@@ -17,7 +17,8 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { APP_NAME, APP_TAGLINE, YEMEN_GOVERNORATES, SERVICE_CATEGORIES } from '@/lib/constants';
+import { APP_NAME, APP_TAGLINE, YEMEN_GOVERNORATES } from '@/lib/constants';
+import { ServiceCategoryPicker } from '@/components/shared/ServiceCategoryPicker';
 import type { UserRole } from '@/lib/supabase';
 import {
   getCurrentPosition,
@@ -227,15 +228,15 @@ function LoginForm({
   onRegister: () => void;
 }) {
   const { signIn, loading } = useAuth();
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorBanner(null);
-    if (!email || !password) return;
-    const { error } = await signIn(email, password);
+    if (!phone || !password) return;
+    const { error } = await signIn(phone, password);
     if (error) setErrorBanner(error);
   };
 
@@ -250,12 +251,14 @@ function LoginForm({
           <ErrorBanner message={errorBanner} onClose={() => setErrorBanner(null)} />
         )}
 
-        <Field label="البريد الإلكتروني" icon={<Mail className="w-4 h-4" />}>
+        <Field label="رقم الهاتف" icon={<Phone className="w-4 h-4" />}>
           <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@example.com"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="7XX XXX XXX"
             className="pr-10 h-12 rounded-xl bg-muted/40 border-border/60 focus:bg-card"
             required
             dir="ltr"
@@ -305,7 +308,6 @@ function RegisterForm({
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [whatsappCopied, setWhatsappCopied] = useState(false);
-  const [email, setEmail] = useState('');
   const [governorate, setGovernorate] = useState('');
   const [password, setPassword] = useState('');
   const [serviceCategory, setServiceCategory] = useState('');
@@ -383,7 +385,7 @@ function RegisterForm({
     e.preventDefault();
     setErrorBanner(null);
     setNeedsEmailConfirmation(false);
-    if (!fullName || !phone || !email || !governorate || !password) {
+    if (!fullName || !phone || !governorate || !password) {
       setErrorBanner('الرجاء إكمال جميع الحقول المطلوبة');
       return;
     }
@@ -413,7 +415,6 @@ function RegisterForm({
     }
 
     const result = await signUp({
-      email,
       password,
       fullName,
       phone,
@@ -473,6 +474,8 @@ function RegisterForm({
         <Field label="رقم الهاتف" icon={<Phone className="w-4 h-4" />}>
           <Input
             type="tel"
+            inputMode="tel"
+            autoComplete="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="7XX XXX XXX"
@@ -513,18 +516,6 @@ function RegisterForm({
               )}
             </button>
           )}
-        </Field>
-
-        <Field label="البريد الإلكتروني" icon={<Mail className="w-4 h-4" />}>
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@example.com"
-            className="pr-10 h-12 rounded-xl bg-muted/40 border-border/60 focus:bg-card"
-            required
-            dir="ltr"
-          />
         </Field>
 
         <Field label="المحافظة" icon={<MapPin className="w-4 h-4" />}>
@@ -590,18 +581,14 @@ function RegisterForm({
         {role === 'provider' && (
           <>
             <Field label="نوع الخدمة / المجال" icon={<Briefcase className="w-4 h-4" />}>
-              <Select value={serviceCategory} onValueChange={setServiceCategory} required>
-                <SelectTrigger className="h-12 rounded-xl bg-muted/40 border-border/60 focus:bg-card pr-10">
-                  <SelectValue placeholder="اختر نوع الخدمة" />
-                </SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {SERVICE_CATEGORIES.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="pr-10">
+                <ServiceCategoryPicker
+                  value={serviceCategory}
+                  onChange={setServiceCategory}
+                  mode="select"
+                  placeholder="اختر التصنيف ثم التخصص"
+                />
+              </div>
             </Field>
 
             <Field label="نبذة عن الخدمة (اختياري)" icon={<Sparkles className="w-4 h-4" />}>
@@ -793,9 +780,10 @@ function EmailConfirmationGuide() {
             لإكمال التسجيل: أوقف تأكيد البريد في Supabase
           </div>
           <p className="text-amber-800 leading-relaxed mb-2.5">
-            Supabase يطلب من المستخدمين تأكيد بريدهم قبل الدخول، لكن هذا يسبب خطأ
+            التطبيق يعتمد على رقم الهاتف للدخول، لكن Supabase ما زال يستخدم تأكيداً داخلياً
+            قد يسبب خطأ
             <span className="font-mono bg-amber-100 px-1 rounded mx-1">rate limit</span>
-            عند محاولات متعددة. أوقف هذا الخيار لتسجيل دخول فوري بدون بريد تأكيد:
+            . أوقف خيار التأكيد لتسجيل فوري:
           </p>
 
           <ol className="space-y-1.5 text-amber-900 mb-3">

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   User, LogOut, MessageCircle, FileText, Camera, ChevronLeft,
-  Mail, Phone, MapPin, Edit3, X, Check, MessageSquare, Inbox,
+  Phone, MapPin, Edit3, X, Check, MessageSquare, Inbox,
   CircleDollarSign, Bell, AlertTriangle,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase, type Profile, type ServiceRequest, type Offer, type Message } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
-import { YEMEN_GOVERNORATES, getCategoryName, APP_NAME } from '@/lib/constants';
+import { YEMEN_GOVERNORATES, getCategoryPath, APP_NAME } from '@/lib/constants';
 import { getInitials, formatRelativeTime, formatCurrency } from '@/lib/utils';
 
 type Conversation = {
@@ -207,13 +207,7 @@ export function UserProfileTab({
                   <h3 className="font-bold text-lg mt-3">{profile.full_name}</h3>
                   <Badge variant="secondary" className="mt-1">مستخدم</Badge>
                   <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Mail className="w-3 h-3" />
-                      {profile.email}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1" dir="ltr">
                       <Phone className="w-3 h-3" />
                       {profile.phone}
                     </span>
@@ -407,7 +401,7 @@ export function UserProfileTab({
                           <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{r.description}</p>
                           <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
                             <Badge variant="outline" className="text-[10px]">
-                              {getCategoryName(r.category)}
+                              {getCategoryPath(r.category)}
                             </Badge>
                             <span>{formatRelativeTime(r.created_at)}</span>
                           </div>
@@ -496,7 +490,7 @@ export function UserProfileTab({
             <DialogDescription className="text-center">
               هل أنت متأكد من تسجيل الخروج من حسابك؟
               <br />
-              ستحتاج لإدخال البريد وكلمة السر للدخول مجددًا.
+              ستحتاج لإدخال رقم الهاتف وكلمة السر للدخول مجددًا.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-row gap-2 sm:flex-row">

@@ -35,6 +35,8 @@ export type Profile = {
   created_at: string;
   is_approved?: boolean;
   is_blocked?: boolean;
+  /** توثيق يدوي من الأدمن */
+  admin_verified?: boolean;
   rating_override?: number | null;
   rating_override_note?: string | null;
 };
@@ -51,6 +53,10 @@ export type ServiceRequest = {
   longitude: number | null;
   location_label: string | null;
   created_at: string;
+  /** مدة المهلة بالأيام عند الإنشاء */
+  deadline_days?: number | null;
+  /** وقت الإغلاق الإجباري */
+  expires_at?: string | null;
   profile?: Profile;
   offers_count?: number;
 };

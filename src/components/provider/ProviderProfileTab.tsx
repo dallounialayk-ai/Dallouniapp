@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import {
-  LogOut, Camera, Mail, Phone, MapPin, Edit3, X, Check,
+  LogOut, Camera, Phone, MapPin, Edit3, X, Check,
   MessageCircle, Image as ImageIcon, Plus, Trash2, Briefcase,
-  Sparkles, Bell, AlertTriangle, Package, Tag,
+  Sparkles, Bell, AlertTriangle, Package, Tag, Pencil,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -24,10 +24,13 @@ import { toast } from 'sonner';
 import { supabase, type Profile, type CatalogItem, type Message } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
 import {
-  SERVICE_CATEGORIES, YEMEN_GOVERNORATES, getCategoryName, APP_NAME,
+  YEMEN_GOVERNORATES, getCategoryName, getCategoryPath, APP_NAME,
   PRODUCT_UNITS, isBuildingMaterialsProvider,
 } from '@/lib/constants';
+import { ServiceCategoryPicker } from '@/components/shared/ServiceCategoryPicker';
+import { VerifiedBadge } from '@/components/shared/VerifiedBadge';
 import { getInitials, formatRelativeTime, formatCurrency } from '@/lib/utils';
+import { fetchProviderVerification } from '@/lib/verification';
 
 type Conversation = {
   peer: Profile;
@@ -55,6 +58,8 @@ export function ProviderProfileTab({
 
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
+  const [editingCatalogId, setEditingCatalogId] = useState<string | null>(null);
+  const [savingCatalog, setSavingCatalog] = useState(false);
   const [newCatalogTitle, setNewCatalogTitle] = useState('');
   const [newCatalogDesc, setNewCatalogDesc] = useState('');
   const [newCatalogImage, setNewCatalogImage] = useState('');
@@ -63,6 +68,7 @@ export function ProviderProfileTab({
   const [uploadingCatalog, setUploadingCatalog] = useState(false);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [verified, setVerified] = useState(false);
 
   const loadCatalog = useCallback(async () => {
     if (!profile) return;
@@ -110,6 +116,13 @@ export function ProviderProfileTab({
     } else {
       setConversations([]);
     }
+  }, [profile]);
+
+  useEffect(() => {
+    if (!profile) return;
+    void fetchProviderVerification(profile.id, profile.admin_verified).then((r) => {
+      setVerified(r.verified);
+    });
   }, [profile]);
 
   useEffect(() => {
@@ -161,6 +174,30 @@ export function ProviderProfileTab({
     setUploadingAvatar(false);
   };
 
+  const resetCatalogForm = () => {
+    setEditingCatalogId(null);
+    setNewCatalogTitle('');
+    setNewCatalogDesc('');
+    setNewCatalogImage('');
+    setNewCatalogPrice('');
+    setNewCatalogUnit('');
+  };
+
+  const openAddCatalogDialog = () => {
+    resetCatalogForm();
+    setCatalogDialogOpen(true);
+  };
+
+  const openEditCatalogDialog = (item: CatalogItem) => {
+    setEditingCatalogId(item.id);
+    setNewCatalogTitle(item.title ?? '');
+    setNewCatalogDesc(item.description ?? '');
+    setNewCatalogImage(item.image_url ?? '');
+    setNewCatalogPrice(item.price != null ? String(item.price) : '');
+    setNewCatalogUnit(item.unit ?? '');
+    setCatalogDialogOpen(true);
+  };
+
   const handleCatalogImageUpload = async (file: File) => {
     if (!profile) return;
     setUploadingCatalog(true);
@@ -179,7 +216,7 @@ export function ProviderProfileTab({
     setUploadingCatalog(false);
   };
 
-  const handleAddCatalog = async () => {
+  const handleSaveCatalog = async () => {
     if (!profile) return;
     if (!newCatalogTitle.trim()) {
       toast.error(isMaterialsProvider ? 'الرجاء إدخال اسم الصنف' : 'الرجاء إدخال عنوان للعمل');
@@ -193,59 +230,106 @@ export function ProviderProfileTab({
       toast.error('الرجاء إدخال سعر الوحدة');
       return;
     }
-    const insertData: Record<string, any> = {
-      provider_id: profile.id,
+
+    setSavingCatalog(true);
+
+    const payload: Record<string, unknown> = {
       title: newCatalogTitle.trim(),
       description: newCatalogDesc.trim() || null,
       image_url: newCatalogImage,
     };
-    // إضافة السعر والوحدة فقط لمواد البناء
     if (isMaterialsProvider) {
-      insertData.price = parseFloat(newCatalogPrice) || null;
-      insertData.unit = newCatalogUnit || null;
+      payload.price = parseFloat(newCatalogPrice) || null;
+      payload.unit = newCatalogUnit || null;
     }
-    let { data, error } = await supabase
-      .from('catalog_items')
-      .insert(insertData)
-      .select('*')
-      .single();
 
-    // إذا فشل الإدراج بسبب عدم وجود عمود price/unit (لم يُطبّق SQL بعد)
-    // أعد المحاولة بدون price و unit
-    if (error && isMaterialsProvider && error.message.includes('column')) {
-      const fallbackData: Record<string, any> = {
-        provider_id: profile.id,
-        title: newCatalogTitle.trim(),
-        description: `${newCatalogDesc.trim() || ''}\n\nالسعر: ${formatCurrency(parseFloat(newCatalogPrice))}${newCatalogUnit ? ' / ' + newCatalogUnit : ''}`.trim(),
-        image_url: newCatalogImage,
-      };
-      const fallback = await supabase
-        .from('catalog_items')
-        .insert(fallbackData)
-        .select('*')
-        .single();
-      data = fallback.data;
-      error = fallback.error;
-      if (fallback.error) {
-        toast.error('لتسجيل الأسعار بشكل صحيح، الرجاء تطبيق ملف add-price-column.sql في Supabase SQL Editor. meanwhile تم حفظ الصنف مع السعر في الوصف.');
+    try {
+      if (editingCatalogId) {
+        let { data, error } = await supabase
+          .from('catalog_items')
+          .update(payload)
+          .eq('id', editingCatalogId)
+          .eq('provider_id', profile.id)
+          .select('*')
+          .single();
+
+        if (error && isMaterialsProvider && error.message.includes('column')) {
+          const fallback = await supabase
+            .from('catalog_items')
+            .update({
+              title: payload.title,
+              description: `${newCatalogDesc.trim() || ''}\n\nالسعر: ${formatCurrency(parseFloat(newCatalogPrice))}${newCatalogUnit ? ' / ' + newCatalogUnit : ''}`.trim(),
+              image_url: newCatalogImage,
+            })
+            .eq('id', editingCatalogId)
+            .eq('provider_id', profile.id)
+            .select('*')
+            .single();
+          data = fallback.data;
+          error = fallback.error;
+        }
+
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+
+        if (data) {
+          setCatalog((prev) =>
+            prev.map((c) => (c.id === editingCatalogId ? (data as CatalogItem) : c))
+          );
+        }
+        toast.success(isMaterialsProvider ? 'تم تحديث الصنف بنجاح' : 'تم تحديث العمل بنجاح');
       } else {
-        toast.success('تمت إضافة الصنف (السعر محفوظ في الوصف مؤقتًا)');
+        const insertData: Record<string, unknown> = {
+          provider_id: profile.id,
+          ...payload,
+        };
+
+        let { data, error } = await supabase
+          .from('catalog_items')
+          .insert(insertData)
+          .select('*')
+          .single();
+
+        if (error && isMaterialsProvider && error.message.includes('column')) {
+          const fallback = await supabase
+            .from('catalog_items')
+            .insert({
+              provider_id: profile.id,
+              title: newCatalogTitle.trim(),
+              description: `${newCatalogDesc.trim() || ''}\n\nالسعر: ${formatCurrency(parseFloat(newCatalogPrice))}${newCatalogUnit ? ' / ' + newCatalogUnit : ''}`.trim(),
+              image_url: newCatalogImage,
+            })
+            .select('*')
+            .single();
+          data = fallback.data;
+          error = fallback.error;
+          if (!error) {
+            if (data) setCatalog((prev) => [data as CatalogItem, ...prev]);
+            toast.success('تمت إضافة الصنف (السعر محفوظ في الوصف مؤقتًا)');
+            setCatalogDialogOpen(false);
+            resetCatalogForm();
+            return;
+          }
+        }
+
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+
+        if (data) {
+          setCatalog((prev) => [data as CatalogItem, ...prev]);
+        }
+        toast.success(isMaterialsProvider ? 'تمت إضافة الصنف للكاتلوج' : 'تمت إضافة العمل للكاتلوج');
       }
-    } else if (error) {
-      toast.error(error.message);
-      return;
-    } else {
-      toast.success(isMaterialsProvider ? 'تمت إضافة الصنف للكاتلوج' : 'تمت إضافة العمل للكاتلوج');
+
+      setCatalogDialogOpen(false);
+      resetCatalogForm();
+    } finally {
+      setSavingCatalog(false);
     }
-    if (data) {
-      setCatalog((prev) => [data as CatalogItem, ...prev]);
-    }
-    setCatalogDialogOpen(false);
-    setNewCatalogTitle('');
-    setNewCatalogDesc('');
-    setNewCatalogImage('');
-    setNewCatalogPrice('');
-    setNewCatalogUnit('');
   };
 
   const handleDeleteCatalog = async (id: string) => {
@@ -255,7 +339,7 @@ export function ProviderProfileTab({
       return;
     }
     setCatalog((prev) => prev.filter((c) => c.id !== id));
-    toast.success('تم حذف العمل');
+    toast.success(isMaterialsProvider ? 'تم حذف الصنف' : 'تم حذف العمل');
   };
 
   const handleSignOut = async () => {
@@ -307,10 +391,13 @@ export function ProviderProfileTab({
               </div>
               {!editing ? (
                 <>
-                  <h3 className="font-bold text-lg mt-3">{profile.full_name}</h3>
+                  <h3 className="font-bold text-lg mt-3 inline-flex items-center justify-center gap-1.5">
+                    {profile.full_name}
+                    <VerifiedBadge verified={verified} size="md" />
+                  </h3>
                   <Badge variant="secondary" className="mt-1 flex items-center gap-1">
                     <Briefcase className="w-3 h-3" />
-                    {getCategoryName(profile.service_category ?? '')}
+                    {getCategoryPath(profile.service_category ?? '')}
                   </Badge>
                   {profile.bio && (
                     <p className="text-xs text-muted-foreground mt-2 leading-relaxed line-clamp-3">
@@ -318,13 +405,7 @@ export function ProviderProfileTab({
                     </p>
                   )}
                   <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Mail className="w-3 h-3" />
-                      {profile.email}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1" dir="ltr">
                       <Phone className="w-3 h-3" />
                       {profile.phone}
                     </span>
@@ -393,16 +474,15 @@ export function ProviderProfileTab({
                   </div>
                   <div>
                     <Label className="text-xs">نوع الخدمة</Label>
-                    <Select value={serviceCategory} onValueChange={setServiceCategory}>
-                      <SelectTrigger className="mt-1 h-10 rounded-xl bg-muted/40">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        {SERVICE_CATEGORIES.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="mt-1">
+                      <ServiceCategoryPicker
+                        value={serviceCategory}
+                        onChange={setServiceCategory}
+                        mode="select"
+                        placeholder="اختر التصنيف ثم التخصص"
+                        triggerClassName="w-full h-10 rounded-xl bg-muted/40 border border-border/60 px-3 text-sm text-right flex items-center justify-between gap-2"
+                      />
+                    </div>
                   </div>
                   <div>
                     <Label className="text-xs">نبذة عن الخدمة</Label>
@@ -474,7 +554,7 @@ export function ProviderProfileTab({
 
             <TabsContent value="catalog" className="mt-3">
               <Button
-                onClick={() => setCatalogDialogOpen(true)}
+                onClick={openAddCatalogDialog}
                 className="w-full h-10 rounded-xl mb-3"
               >
                 {isMaterialsProvider ? (
@@ -526,12 +606,24 @@ export function ProviderProfileTab({
                             {c.unit && <span className="font-normal opacity-90"> / {c.unit}</span>}
                           </div>
                         )}
-                        <button
-                          onClick={() => handleDeleteCatalog(c.id)}
-                          className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="absolute top-2 left-2 flex flex-col gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => openEditCatalogDialog(c)}
+                            className="w-7 h-7 rounded-full bg-black/55 text-white flex items-center justify-center"
+                            title="تعديل"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCatalog(c.id)}
+                            className="w-7 h-7 rounded-full bg-black/55 text-white flex items-center justify-center"
+                            title="حذف"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <div className="p-2.5">
                         <h4 className="font-semibold text-xs truncate">{c.title}</h4>
@@ -641,7 +733,7 @@ export function ProviderProfileTab({
             <DialogDescription className="text-center">
               هل أنت متأكد من تسجيل الخروج من حسابك؟
               <br />
-              ستحتاج لإدخال البريد وكلمة السر للدخول مجددًا.
+              ستحتاج لإدخال رقم الهاتف وكلمة السر للدخول مجددًا.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-row gap-2 sm:flex-row">
@@ -675,17 +767,33 @@ export function ProviderProfileTab({
         </DialogContent>
       </Dialog>
 
-      {/* Catalog add dialog */}
-      <Dialog open={catalogDialogOpen} onOpenChange={setCatalogDialogOpen}>
+      {/* Catalog add / edit dialog */}
+      <Dialog
+        open={catalogDialogOpen}
+        onOpenChange={(open) => {
+          setCatalogDialogOpen(open);
+          if (!open) resetCatalogForm();
+        }}
+      >
         <DialogContent className="rounded-3xl max-w-md max-h-[90vh] overflow-y-auto scrollbar-overlay">
           <DialogHeader>
             <DialogTitle className="text-right">
-              {isMaterialsProvider ? 'إضافة صنف جديد' : 'إضافة عمل للكاتلوج'}
+              {editingCatalogId
+                ? isMaterialsProvider
+                  ? 'تعديل الصنف'
+                  : 'تعديل العمل'
+                : isMaterialsProvider
+                  ? 'إضافة صنف جديد'
+                  : 'إضافة عمل للكاتلوج'}
             </DialogTitle>
             <DialogDescription className="text-right">
-              {isMaterialsProvider
-                ? 'أضف أصناف مواد البناء مع الأسعار لعرضها للعملاء'
-                : 'اعرض أعمالك السابقة لكسب ثقة العملاء'}
+              {editingCatalogId
+                ? isMaterialsProvider
+                  ? 'حدّث السعر أو الصورة أو الوصف وأي تفاصيل للصنف'
+                  : 'حدّث صورة العمل والوصف والتفاصيل'
+                : isMaterialsProvider
+                  ? 'أضف أصناف مواد البناء مع الأسعار لعرضها للعملاء'
+                  : 'اعرض أعمالك السابقة لكسب ثقة العملاء'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -693,12 +801,32 @@ export function ProviderProfileTab({
               {newCatalogImage ? (
                 <div className="relative aspect-video rounded-xl overflow-hidden bg-muted">
                   <img src={newCatalogImage} alt="preview" className="w-full h-full object-cover" />
-                  <button
-                    onClick={() => setNewCatalogImage('')}
-                    className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="absolute top-2 left-2 flex gap-1.5">
+                    <label className="w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center cursor-pointer">
+                      <Camera className="w-3.5 h-3.5" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void handleCatalogImageUpload(f);
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setNewCatalogImage('')}
+                      className="w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {uploadingCatalog && (
+                    <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                      <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
                 </div>
               ) : (
                 <label className="block aspect-video rounded-xl bg-muted/40 border-2 border-dashed border-border/60 flex items-center justify-center cursor-pointer hover:bg-muted/60 transition-colors">
@@ -718,7 +846,7 @@ export function ProviderProfileTab({
                     className="sr-only"
                     onChange={(e) => {
                       const f = e.target.files?.[0];
-                      if (f) handleCatalogImageUpload(f);
+                      if (f) void handleCatalogImageUpload(f);
                     }}
                   />
                 </label>
@@ -736,7 +864,6 @@ export function ProviderProfileTab({
               />
             </div>
 
-            {/* حقول السعر والوحدة — فقط لمواد البناء */}
             {isMaterialsProvider && (
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -752,7 +879,7 @@ export function ProviderProfileTab({
                 </div>
                 <div>
                   <Label className="text-xs">وحدة القياس</Label>
-                  <Select value={newCatalogUnit} onValueChange={setNewCatalogUnit}>
+                  <Select value={newCatalogUnit || undefined} onValueChange={setNewCatalogUnit}>
                     <SelectTrigger className="mt-1 h-11 rounded-xl bg-muted/40">
                       <SelectValue placeholder="اختر الوحدة" />
                     </SelectTrigger>
@@ -783,11 +910,19 @@ export function ProviderProfileTab({
               />
             </div>
             <Button
-              onClick={handleAddCatalog}
+              onClick={() => void handleSaveCatalog()}
               className="w-full h-11 rounded-xl font-semibold"
-              disabled={uploadingCatalog}
+              disabled={uploadingCatalog || savingCatalog}
             >
-              {isMaterialsProvider ? 'إضافة الصنف' : 'إضافة للكاتلوج'}
+              {savingCatalog
+                ? 'جاري الحفظ…'
+                : editingCatalogId
+                  ? isMaterialsProvider
+                    ? 'حفظ التعديلات'
+                    : 'حفظ التعديلات'
+                  : isMaterialsProvider
+                    ? 'إضافة الصنف'
+                    : 'إضافة للكاتلوج'}
             </Button>
           </div>
         </DialogContent>

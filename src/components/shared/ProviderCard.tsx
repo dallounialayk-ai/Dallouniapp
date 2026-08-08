@@ -5,17 +5,20 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { Profile } from '@/lib/supabase';
-import { getCategoryName } from '@/lib/constants';
+import { getCategoryPath } from '@/lib/constants';
 import { getInitials } from '@/lib/utils';
+import { VerifiedBadge } from '@/components/shared/VerifiedBadge';
 
 export function ProviderCard({
-  provider, rating, reviewsCount, onClick,
+  provider, rating, reviewsCount, verified, onClick,
 }: {
   provider: Profile;
   rating?: number;
   reviewsCount?: number;
+  verified?: boolean;
   onClick?: () => void;
 }) {
+  const isVerified = verified ?? false;
   return (
     <button
       onClick={onClick}
@@ -39,13 +42,14 @@ export function ProviderCard({
 
         <div className="flex-1 min-w-0 text-right">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-bold text-base truncate group-hover:text-primary transition-colors">
-              {provider.full_name}
+            <h3 className="font-bold text-base truncate group-hover:text-primary transition-colors inline-flex items-center gap-1.5 max-w-full">
+              <span className="truncate">{provider.full_name}</span>
+              <VerifiedBadge verified={isVerified} size="md" />
             </h3>
             <ChevronLeft className="w-4 h-4 text-muted-foreground shrink-0 mt-1 group-hover:text-primary transition-colors" />
           </div>
           <Badge variant="secondary" className="mt-1 mb-1.5 font-medium">
-            {getCategoryName(provider.service_category ?? '')}
+            {getCategoryPath(provider.service_category ?? '')}
           </Badge>
           <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
             {provider.bio || 'لا يوجد وصف'}
@@ -69,10 +73,11 @@ export function ProviderCard({
 }
 
 export function ProviderRowCompact({
-  provider, rating, onClick,
+  provider, rating, verified, onClick,
 }: {
   provider: Profile;
   rating?: number;
+  verified?: boolean;
   onClick?: () => void;
 }) {
   return (
@@ -87,9 +92,12 @@ export function ProviderRowCompact({
         </AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
-        <div className="font-semibold text-sm truncate">{provider.full_name}</div>
+        <div className="font-semibold text-sm truncate inline-flex items-center gap-1 max-w-full">
+          <span className="truncate">{provider.full_name}</span>
+          <VerifiedBadge verified={verified} size="sm" />
+        </div>
         <div className="text-xs text-muted-foreground truncate">
-          {getCategoryName(provider.service_category ?? '')}
+          {getCategoryPath(provider.service_category ?? '')}
         </div>
       </div>
       {rating !== undefined && (

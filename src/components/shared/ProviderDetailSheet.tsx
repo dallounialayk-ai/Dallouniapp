@@ -20,8 +20,10 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase, type Profile, type CatalogItem, type Message, type Review } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
-import { getCategoryName, isBuildingMaterialsProvider } from '@/lib/constants';
+import { getCategoryPath, isBuildingMaterialsProvider } from '@/lib/constants';
 import { getInitials, formatRelativeTime, formatCurrency } from '@/lib/utils';
+import { VerifiedBadge } from '@/components/shared/VerifiedBadge';
+import { fetchProviderVerification } from '@/lib/verification';
 
 export function ProviderDetailSheet({
   provider, open, onOpenChange, onOpenChat,
@@ -40,10 +42,11 @@ export function ProviderDetailSheet({
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [reportComment, setReportComment] = useState('');
+  const [verified, setVerified] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!provider) return;
-    const [catRes, revRes] = await Promise.all([
+    const [catRes, revRes, verification] = await Promise.all([
       supabase
         .from('catalog_items')
         .select('*')
@@ -55,10 +58,12 @@ export function ProviderDetailSheet({
         .eq('reviewed_id', provider.id)
         .eq('review_type', 'provider')
         .order('created_at', { ascending: false }),
+      fetchProviderVerification(provider.id, provider.admin_verified),
     ]);
     setCatalog(catRes.data ?? []);
     const revs = (revRes.data ?? []) as Review[];
     setReviews(revs);
+    setVerified(verification.verified);
     if (revs.length > 0) {
       const sum = revs.reduce((s, r) => s + r.rating, 0);
       setAvgRating(sum / revs.length);
@@ -96,7 +101,7 @@ export function ProviderDetailSheet({
 
   const handleShare = async () => {
     const shareData = {
-      title: `${provider.full_name} — ${getCategoryName(provider.service_category ?? '')}`,
+      title: `${provider.full_name} — ${getCategoryPath(provider.service_category ?? '')}`,
       text: `تعرف على ${provider.full_name} على تطبيق دلّوني عليك`,
       url: window.location.href,
     };
@@ -194,10 +199,13 @@ export function ProviderDetailSheet({
                     {getInitials(provider.full_name)}
                   </AvatarFallback>
                 </Avatar>
-                <h2 className="text-xl font-bold mt-3">{provider.full_name}</h2>
+                <h2 className="text-xl font-bold mt-3 inline-flex items-center justify-center gap-1.5">
+                  {provider.full_name}
+                  <VerifiedBadge verified={verified} size="lg" />
+                </h2>
                 <Badge variant="secondary" className="mt-1.5 font-medium">
                   <Briefcase className="w-3 h-3 ml-1" />
-                  {getCategoryName(provider.service_category ?? '')}
+                  {getCategoryPath(provider.service_category ?? '')}
                 </Badge>
                 <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">

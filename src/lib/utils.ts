@@ -30,6 +30,31 @@ export function formatRelativeTime(date: string | Date): string {
   return `قبل ${Math.floor(diffDay / 365)} سنة`;
 }
 
+/** نص مهلة الطلب المتبقية (أو منتهية) */
+export function formatDeadlineRemaining(expiresAt: string | Date | null | undefined): {
+  text: string;
+  urgent: boolean;
+  expired: boolean;
+} | null {
+  if (!expiresAt) return null;
+  const end = new Date(expiresAt).getTime();
+  if (!Number.isFinite(end)) return null;
+  const now = Date.now();
+  const diffMs = end - now;
+  if (diffMs <= 0) {
+    return { text: 'انتهت المهلة', urgent: true, expired: true };
+  }
+  const diffMin = Math.ceil(diffMs / 60000);
+  const diffHr = Math.ceil(diffMs / 3600000);
+  const diffDay = Math.ceil(diffMs / 86400000);
+  let text: string;
+  if (diffMin < 60) text = `متبقي ${diffMin} دقيقة`;
+  else if (diffHr < 24) text = `متبقي ${diffHr} ساعة`;
+  else if (diffDay === 1) text = 'متبقي يوم واحد';
+  else text = `متبقي ${diffDay} يوم`;
+  return { text, urgent: diffHr <= 24, expired: false };
+}
+
 export function formatCurrency(amount: number | null | undefined): string {
   if (amount === null || amount === undefined) return '—';
   return new Intl.NumberFormat('ar-YE', { maximumFractionDigits: 0 }).format(amount) + ' ر.ي';

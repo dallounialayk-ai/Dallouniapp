@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase, type Profile, type UserRole } from '@/lib/supabase';
 import { translateAuthError } from '@/lib/auth-errors';
+import { identifierToAuthEmail, normalizeYemenPhone } from '@/lib/phone-auth';
 
 type AuthState = {
   profile: Profile | null;
@@ -12,7 +13,6 @@ type AuthState = {
   error: string | null;
   signUp: (
     data: {
-      email: string;
       password: string;
       fullName: string;
       phone: string;
@@ -25,7 +25,8 @@ type AuthState = {
       longitude?: number | null;
     }
   ) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  /** phone أو بريد قديم */
+  signIn: (identifier: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfile: (patch: Partial<Profile>) => Promise<{ error: string | null }>;
@@ -44,18 +45,34 @@ export const useAuth = create<AuthState>()(
       signUp: async (data) => {
         set({ loading: true, error: null });
         try {
+          const phoneResult = normalizeYemenPhone(data.phone);
+          if (!phoneResult.ok) {
+            set({ loading: false, error: phoneResult.message });
+            return { error: phoneResult.message };
+          }
+
+          let whatsappNormalized: string | null = null;
+          if (data.whatsappNumber?.trim()) {
+            const wa = normalizeYemenPhone(data.whatsappNumber);
+            if (!wa.ok) {
+              set({ loading: false, error: `واتساب: ${wa.message}` });
+              return { error: `واتساب: ${wa.message}` };
+            }
+            whatsappNormalized = wa.display;
+          }
+
           const { data: signUpData, error } = await supabase.auth.signUp({
-            email: data.email,
+            email: phoneResult.authEmail,
             password: data.password,
             options: {
               data: {
                 full_name: data.fullName,
-                phone: data.phone,
+                phone: phoneResult.display,
                 governorate: data.governorate,
                 role: data.role,
                 bio: data.bio ?? null,
                 service_category: data.serviceCategory ?? null,
-                whatsapp_number: data.whatsappNumber || null,
+                whatsapp_number: whatsappNormalized,
                 latitude: data.latitude ?? null,
                 longitude: data.longitude ?? null,
               },
@@ -68,8 +85,6 @@ export const useAuth = create<AuthState>()(
             return { error: friendly };
           }
 
-          // حالة خاصة: تم إنشاء المستخدم لكنه يحتاج تأكيد بريد
-          // (يحدث عند تفعيل "Confirm email" في Supabase)
           if (signUpData.user && !signUpData.session) {
             set({ loading: false });
             return {
@@ -79,13 +94,15 @@ export const useAuth = create<AuthState>()(
           }
 
           if (signUpData.user && signUpData.session) {
-            const updateData: Record<string, any> = {};
+            const updateData: Record<string, unknown> = {
+              full_name: data.fullName,
+              phone: phoneResult.display,
+              email: phoneResult.display,
+              whatsapp_number: whatsappNormalized,
+              governorate: data.governorate,
+            };
             if (data.bio) updateData.bio = data.bio;
             if (data.serviceCategory) updateData.service_category = data.serviceCategory;
-            updateData.full_name = data.fullName;
-            updateData.phone = data.phone;
-            updateData.whatsapp_number = data.whatsappNumber || null;
-            updateData.governorate = data.governorate;
             if (data.latitude != null) updateData.latitude = data.latitude;
             if (data.longitude != null) updateData.longitude = data.longitude;
 
@@ -96,17 +113,12 @@ export const useAuth = create<AuthState>()(
                 .eq('key', 'provider_approval_required')
                 .maybeSingle();
               const raw = setting?.value;
-              const needsApproval =
-                raw === true ||
-                raw === 'true' ||
-                (typeof raw === 'object' && raw !== null && String(raw) === 'true');
-              // jsonb boolean يأتي كـ boolean من supabase-js عادة
               const required =
                 typeof raw === 'boolean'
                   ? raw
                   : typeof raw === 'string'
                     ? raw === 'true'
-                    : needsApproval;
+                    : raw === true || raw === 'true';
               if (required) updateData.is_approved = false;
             }
 
@@ -129,18 +141,24 @@ export const useAuth = create<AuthState>()(
 
           set({ loading: false });
           return { error: null };
-        } catch (e: any) {
+        } catch (e: unknown) {
           const friendly = translateAuthError(e);
           set({ loading: false, error: friendly });
           return { error: friendly };
         }
       },
 
-      signIn: async (email, password) => {
+      signIn: async (identifier, password) => {
         set({ loading: true, error: null });
         try {
+          const idResult = identifierToAuthEmail(identifier);
+          if (!idResult.ok) {
+            set({ loading: false, error: idResult.message });
+            return { error: idResult.message };
+          }
+
           const { data, error } = await supabase.auth.signInWithPassword({
-            email,
+            email: idResult.authEmail,
             password,
           });
 
@@ -168,7 +186,7 @@ export const useAuth = create<AuthState>()(
 
           set({ loading: false });
           return { error: 'حدث خطأ غير معروف' };
-        } catch (e: any) {
+        } catch (e: unknown) {
           const friendly = translateAuthError(e);
           set({ loading: false, error: friendly });
           return { error: friendly };

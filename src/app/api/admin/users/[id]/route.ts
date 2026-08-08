@@ -13,6 +13,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
   if (typeof body.is_approved === 'boolean') patch.is_approved = body.is_approved;
   if (typeof body.is_blocked === 'boolean') patch.is_blocked = body.is_blocked;
+  if (typeof body.admin_verified === 'boolean') patch.admin_verified = body.admin_verified;
   if (body.rating_override === null) {
     patch.rating_override = null;
     patch.rating_override_note = null;
@@ -49,6 +50,16 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         type: 'admin_approval',
         title: 'تمت الموافقة على حسابك',
         body: 'يمكنك الآن استخدام حساب مقدم الخدمة بالكامل.',
+        data: { source: 'admin' },
+      });
+    }
+
+    if (patch.admin_verified === true && data?.role === 'provider') {
+      await db.from('notifications').insert({
+        user_id: id,
+        type: 'admin_verified',
+        title: 'تم توثيق حسابك',
+        body: 'ظهرت علامة التوثيق الزرقاء على بطاقتك وملفك الشخصي.',
         data: { source: 'admin' },
       });
     }

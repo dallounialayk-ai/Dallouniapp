@@ -11,8 +11,9 @@ import {
 } from 'react-leaflet';
 import L from 'leaflet';
 import type { Profile } from '@/lib/supabase';
-import { getCategoryName } from '@/lib/constants';
+import { getCategoryPath } from '@/lib/constants';
 import { isValidCoords, type LatLng } from '@/lib/geo';
+import { VerifiedBadge } from '@/components/shared/VerifiedBadge';
 import 'leaflet/dist/leaflet.css';
 
 function FitBounds({
@@ -68,6 +69,7 @@ function createProviderIcon(avatarUrl: string | null, name: string) {
 export type MapProvider = Profile & {
   avgRating?: number;
   distanceKm?: number;
+  verified?: boolean;
 };
 
 export function ProvidersMap({
@@ -150,9 +152,12 @@ export function ProvidersMap({
             >
               <Popup>
                 <div className="text-right min-w-[140px]" dir="rtl">
-                  <div className="font-bold text-sm">{p.full_name}</div>
+                  <div className="font-bold text-sm inline-flex items-center gap-1">
+                    <span>{p.full_name}</span>
+                    <VerifiedBadge verified={Boolean(p.verified)} size="sm" />
+                  </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    {getCategoryName(p.service_category ?? '')}
+                    {getCategoryPath(p.service_category ?? '')}
                   </div>
                   {typeof p.distanceKm === 'number' && (
                     <div className="text-[11px] text-primary mt-1 font-medium">

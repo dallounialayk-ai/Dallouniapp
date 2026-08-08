@@ -9,11 +9,16 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase, type Profile } from '@/lib/supabase';
-import { SERVICE_CATEGORIES, getCategoryName } from '@/lib/constants';
+import { getCategoryName, getCategoryPath, matchesCategoryFilter } from '@/lib/constants';
+import { ServiceCategoryPicker } from '@/components/shared/ServiceCategoryPicker';
 import { ProviderCard } from '@/components/shared/ProviderCard';
 import { ProvidersMap } from '@/components/shared/ProvidersMapDynamic';
 import { LocationEnableDialog } from '@/components/shared/LocationEnableDialog';
 import { useAuth } from '@/store/auth';
+import {
+  computeVerification,
+  fetchVerificationStatsMap,
+} from '@/lib/verification';
 import {
   distanceKm,
   getCurrentPosition,
@@ -29,6 +34,7 @@ type ProviderWithMeta = Profile & {
   avgRating?: number;
   reviewsCount?: number;
   distanceKm?: number;
+  verified?: boolean;
 };
 
 export function UserHomeTab({
@@ -42,7 +48,17 @@ export function UserHomeTab({
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [governorateFilter, setGovernorateFilter] = useState<string>('all');
+  const [verifiedFilter, setVerifiedFilter] = useState<'all' | 'verified' | 'unverified'>('all');
+  const [ratingFilter, setRatingFilter] = useState<'all' | '4' | '3' | '2'>('all');
   const [showFilters, setShowFilters] = useState(false);
+
+  const resetFilters = () => {
+    setCategoryFilter('all');
+    setGovernorateFilter('all');
+    setVerifiedFilter('all');
+    setRatingFilter('all');
+    setSearch('');
+  };
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [showLocationDialog, setShowLocationDialog] = useState(false);
   const [showNearbyMap, setShowNearbyMap] = useState(false);
@@ -64,6 +80,8 @@ export function UserHomeTab({
 
     const providerIds = data.map((p) => p.id);
     let reviewsMap: Record<string, { avg: number; count: number }> = {};
+    let verificationMap = await fetchVerificationStatsMap(providerIds);
+
     if (providerIds.length > 0) {
       const { data: reviews } = await supabase
         .from('reviews')
@@ -91,10 +109,19 @@ export function UserHomeTab({
       const count = reviewsMap[p.id]?.count ?? 0;
       const override =
         typeof profile.rating_override === 'number' ? profile.rating_override : null;
+      const verification = computeVerification(
+        profile.admin_verified,
+        verificationMap[p.id] ?? {
+          offersCount: 0,
+          highReviewsCount: 0,
+          reportsCount: 0,
+        }
+      );
       return {
         ...profile,
         avgRating: override != null ? override : avgFromReviews,
         reviewsCount: override != null && count === 0 ? 1 : count,
+        verified: verification.verified,
       };
     });
 
@@ -142,17 +169,27 @@ export function UserHomeTab({
   const filtered = useMemo(() => {
     let list = providers;
     if (categoryFilter !== 'all') {
-      list = list.filter((p) => p.service_category === categoryFilter);
+      list = list.filter((p) => matchesCategoryFilter(p.service_category, categoryFilter));
     }
     if (governorateFilter !== 'all') {
       list = list.filter((p) => p.governorate === governorateFilter);
+    }
+    if (verifiedFilter === 'verified') {
+      list = list.filter((p) => p.verified);
+    } else if (verifiedFilter === 'unverified') {
+      list = list.filter((p) => !p.verified);
+    }
+    if (ratingFilter !== 'all') {
+      const min = Number(ratingFilter);
+      list = list.filter((p) => (p.avgRating ?? 0) >= min);
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((p) =>
         p.full_name.toLowerCase().includes(q) ||
         (p.bio ?? '').toLowerCase().includes(q) ||
-        getCategoryName(p.service_category ?? '').toLowerCase().includes(q)
+        getCategoryName(p.service_category ?? '').toLowerCase().includes(q) ||
+        getCategoryPath(p.service_category).toLowerCase().includes(q)
       );
     }
     return [...list].sort((a, b) => {
@@ -161,9 +198,14 @@ export function UserHomeTab({
       if (rb !== ra) return rb - ra;
       return (b.reviewsCount ?? 0) - (a.reviewsCount ?? 0);
     });
-  }, [providers, categoryFilter, governorateFilter, search]);
+  }, [providers, categoryFilter, governorateFilter, verifiedFilter, ratingFilter, search]);
 
-  const hasActiveFilters = categoryFilter !== 'all' || governorateFilter !== 'all' || !!search.trim();
+  const hasActiveFilters =
+    categoryFilter !== 'all' ||
+    governorateFilter !== 'all' ||
+    verifiedFilter !== 'all' ||
+    ratingFilter !== 'all' ||
+    !!search.trim();
 
   // عند مسح الفلاتر ارجع من شاشة الخريطة تلقائيًا
   useEffect(() => {
@@ -330,11 +372,7 @@ export function UserHomeTab({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setCategoryFilter('all');
-                    setGovernorateFilter('all');
-                    setSearch('');
-                  }}
+                  onClick={resetFilters}
                   className="h-9 rounded-xl text-xs text-muted-foreground mr-auto"
                 >
                   مسح الفلاتر
@@ -343,18 +381,15 @@ export function UserHomeTab({
             </div>
 
             {showFilters && (
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="h-10 rounded-xl bg-muted/40 border-border/40 text-xs">
-                    <SelectValue placeholder="المجال" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">كل المجالات</SelectItem>
-                    {SERVICE_CATEGORIES.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 gap-2 pt-1">
+                <ServiceCategoryPicker
+                  value={categoryFilter}
+                  onChange={setCategoryFilter}
+                  mode="filter"
+                  allowAll
+                  placeholder="كل المجالات"
+                  triggerClassName="w-full h-10 rounded-xl bg-muted/40 border border-border/40 px-3 text-xs text-right flex items-center justify-between gap-2"
+                />
                 <Select value={governorateFilter} onValueChange={setGovernorateFilter}>
                   <SelectTrigger className="h-10 rounded-xl bg-muted/40 border-border/40 text-xs">
                     <SelectValue placeholder="المحافظة" />
@@ -366,6 +401,37 @@ export function UserHomeTab({
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="grid grid-cols-2 gap-2">
+                  <Select
+                    value={verifiedFilter}
+                    onValueChange={(v) =>
+                      setVerifiedFilter(v as 'all' | 'verified' | 'unverified')
+                    }
+                  >
+                    <SelectTrigger className="h-10 rounded-xl bg-muted/40 border-border/40 text-xs">
+                      <SelectValue placeholder="التوثيق" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">كل الحسابات</SelectItem>
+                      <SelectItem value="verified">موثّقون فقط</SelectItem>
+                      <SelectItem value="unverified">غير موثّقين</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={ratingFilter}
+                    onValueChange={(v) => setRatingFilter(v as 'all' | '4' | '3' | '2')}
+                  >
+                    <SelectTrigger className="h-10 rounded-xl bg-muted/40 border-border/40 text-xs">
+                      <SelectValue placeholder="التقييم" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">كل التقييمات</SelectItem>
+                      <SelectItem value="4">4 نجوم فأعلى</SelectItem>
+                      <SelectItem value="3">3 نجوم فأعلى</SelectItem>
+                      <SelectItem value="2">2 نجوم فأعلى</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
           </div>
@@ -377,11 +443,7 @@ export function UserHomeTab({
               ) : filtered.length === 0 ? (
                 <EmptyState
                   hasFilters={!!hasActiveFilters}
-                  onReset={() => {
-                    setCategoryFilter('all');
-                    setGovernorateFilter('all');
-                    setSearch('');
-                  }}
+                  onReset={resetFilters}
                 />
               ) : hasActiveFilters ? (
                 <>
@@ -408,6 +470,7 @@ export function UserHomeTab({
                       provider={p}
                       rating={p.avgRating}
                       reviewsCount={p.reviewsCount}
+                      verified={p.verified}
                       onClick={() => onOpenProvider(p)}
                     />
                   ))}
@@ -423,6 +486,7 @@ export function UserHomeTab({
                       provider={p}
                       rating={p.avgRating}
                       reviewsCount={p.reviewsCount}
+                      verified={p.verified}
                       onClick={() => onOpenProvider(p)}
                     />
                   ))}

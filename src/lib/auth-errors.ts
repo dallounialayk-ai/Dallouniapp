@@ -19,13 +19,13 @@ export function translateAuthError(error: unknown): string {
 
   // Credentials
   if (code === 'invalid_credentials' || msg.includes('invalid credentials')) {
-    return 'البريد الإلكتروني أو كلمة السر غير صحيحة. تأكد من بياناتك وحاول مجددًا.';
+    return 'رقم الهاتف أو كلمة السر غير صحيحة. تأكد من بياناتك وحاول مجددًا.';
   }
   if (code === 'email_not_confirmed' || msg.includes('email not confirmed')) {
-    return 'لم يتم تأكيد بريدك الإلكتروني بعد. افتح صندوق البريد واضغط على رابط التأكيد، أو أوقف تأكيد البريد من إعدادات Supabase.';
+    return 'لم يُفعَّل الحساب بعد. أوقف تأكيد البريد من إعدادات Supabase ثم أعد المحاولة.';
   }
   if (code === 'user_already_exists' || msg.includes('user already registered') || msg.includes('already registered')) {
-    return 'هذا البريد الإلكتروني مسجّل مسبقًا. جرّب تسجيل الدخول بدلاً من ذلك.';
+    return 'رقم الهاتف مسجّل مسبقًا. جرّب تسجيل الدخول بدلاً من ذلك.';
   }
   if (code === 'weak_password' || msg.includes('weak password') || msg.includes('password should be')) {
     return 'كلمة السر ضعيفة. استخدم 6 أحرف على الأقل، ويفضّل دمج أحرف وأرقام.';
@@ -34,9 +34,9 @@ export function translateAuthError(error: unknown): string {
     return 'كلمة السر يجب أن تكون 6 أحرف على الأقل.';
   }
 
-  // Email format
+  // Email / phone format (Supabase ما زال يتحقق من صيغة البريد التقني)
   if (msg.includes('invalid email') || msg.includes('unable to validate email')) {
-    return 'صيغة البريد الإلكتروني غير صحيحة.';
+    return 'رقم الهاتف غير صالح. تحقق منه وحاول مجددًا.';
   }
 
   // Signup disabled

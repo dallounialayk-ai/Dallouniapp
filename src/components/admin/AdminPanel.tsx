@@ -4,9 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Briefcase, Bell, Flag, Settings,
-  LogOut, Download, Search, Check, X, Star, Loader2, RefreshCw,
+  LogOut, Download, Search, Check, X, Star, Loader2, RefreshCw, BadgeCheck,
 } from 'lucide-react';
-import { APP_NAME, SERVICE_CATEGORIES, YEMEN_GOVERNORATES, getCategoryName } from '@/lib/constants';
+import { APP_NAME, YEMEN_GOVERNORATES, getCategoryName, getCategoryPath } from '@/lib/constants';
+import { ServiceCategoryPicker } from '@/components/shared/ServiceCategoryPicker';
+import {
+  VERIFIED_MAX_REPORTS,
+  VERIFIED_MIN_HIGH_REVIEWS,
+  VERIFIED_MIN_OFFERS,
+} from '@/lib/verification';
 import { toast } from 'sonner';
 
 type Tab = 'dashboard' | 'users' | 'providers' | 'notifications' | 'reports' | 'settings';
@@ -28,6 +34,7 @@ type ProfileRow = {
   bio: string | null;
   is_approved?: boolean;
   is_blocked?: boolean;
+  admin_verified?: boolean;
   rating_override?: number | null;
   rating_override_note?: string | null;
   latitude?: number | null;
@@ -230,6 +237,13 @@ function UsersView({ role }: { role: 'user' | 'provider' }) {
   const [selected, setSelected] = useState<ProfileRow | null>(null);
   const [ratingValue, setRatingValue] = useState('5');
   const [ratingNote, setRatingNote] = useState('');
+  const [verification, setVerification] = useState<{
+    verified: boolean;
+    source: string;
+    autoEligible: boolean;
+    stats: { offersCount: number; highReviewsCount: number; reportsCount: number };
+  } | null>(null);
+  const [verificationLoading, setVerificationLoading] = useState(false);
 
   const queryString = useMemo(() => {
     const p = new URLSearchParams({
@@ -268,6 +282,33 @@ function UsersView({ role }: { role: 'user' | 'provider' }) {
   useEffect(() => {
     setPage(1);
   }, [role, q, governorate, category, approved, sort, dir]);
+
+  useEffect(() => {
+    if (!selected || role !== 'provider') {
+      setVerification(null);
+      return;
+    }
+    let cancelled = false;
+    setVerificationLoading(true);
+    void fetch(`/api/admin/verification?id=${selected.id}`)
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل جلب التوثيق');
+        if (!cancelled) setVerification(data);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setVerification(null);
+          toast.error(e instanceof Error ? e.message : 'فشل جلب التوثيق');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setVerificationLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, role]);
 
   const exportUrl = (format: 'csv' | 'excel') => {
     const p = new URLSearchParams({ role, format });
@@ -332,15 +373,19 @@ function UsersView({ role }: { role: 'user' | 'provider' }) {
         />
         {role === 'provider' && (
           <>
-            <FilterSelect
-              label="التخصص"
-              value={category}
-              onChange={setCategory}
-              options={[
-                { value: '', label: 'الكل' },
-                ...SERVICE_CATEGORIES.map((c) => ({ value: c.id, label: c.name })),
-              ]}
-            />
+            <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 bg-white border border-border rounded-xl px-2 h-10 min-w-[220px]">
+              <span className="whitespace-nowrap">التخصص</span>
+              <div className="flex-1 min-w-0">
+                <ServiceCategoryPicker
+                  value={category || 'all'}
+                  onChange={(v) => setCategory(v === 'all' ? '' : v)}
+                  mode="filter"
+                  allowAll
+                  placeholder="الكل"
+                  triggerClassName="w-full h-8 border-0 bg-transparent px-1 text-sm text-right flex items-center justify-between gap-1"
+                />
+              </div>
+            </div>
             <FilterSelect
               label="الموافقة"
               value={approved}
@@ -406,7 +451,14 @@ function UsersView({ role }: { role: 'user' | 'provider' }) {
               ) : (
                 items.map((u) => (
                   <tr key={u.id} className="border-t border-border/40 hover:bg-muted/20">
-                    <td className="px-3 py-2.5 font-medium">{u.full_name}</td>
+                    <td className="px-3 py-2.5 font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        {u.full_name}
+                        {role === 'provider' && u.admin_verified ? (
+                          <BadgeCheck className="w-3.5 h-3.5 text-[#1D9BF0]" />
+                        ) : null}
+                      </span>
+                    </td>
                     <td className="px-3 py-2.5 text-muted-foreground">{u.email}</td>
                     <td className="px-3 py-2.5 dir-ltr text-right">{u.phone}</td>
                     {role === 'user' ? (
@@ -415,7 +467,7 @@ function UsersView({ role }: { role: 'user' | 'provider' }) {
                     <td className="px-3 py-2.5">{u.governorate}</td>
                     {role === 'provider' ? (
                       <>
-                        <td className="px-3 py-2.5">{getCategoryName(u.service_category || '')}</td>
+                        <td className="px-3 py-2.5">{getCategoryPath(u.service_category || '')}</td>
                         <td className="px-3 py-2.5">
                           <span
                             className={`text-[11px] px-2 py-0.5 rounded-full ${
@@ -492,7 +544,7 @@ function UsersView({ role }: { role: 'user' | 'provider' }) {
               <Info label="المحافظة" value={selected.governorate} />
               <Info
                 label="التخصص"
-                value={selected.service_category ? getCategoryName(selected.service_category) : '—'}
+                value={selected.service_category ? getCategoryPath(selected.service_category) : '—'}
               />
               <Info
                 label="الموقع"
@@ -525,6 +577,70 @@ function UsersView({ role }: { role: 'user' | 'provider' }) {
                     إيقاف الموافقة
                   </button>
                 )}
+              </div>
+            )}
+
+            {role === 'provider' && (
+              <div className="rounded-2xl border border-border/60 p-3 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <BadgeCheck className="w-4 h-4 text-[#1D9BF0]" />
+                  علامة التوثيق الزرقاء
+                </div>
+                {verificationLoading ? (
+                  <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> جاري التحقق من الشروط…
+                  </div>
+                ) : verification ? (
+                  <div className="space-y-2 text-xs text-muted-foreground">
+                    <p>
+                      الحالة:{' '}
+                      <span className="font-semibold text-foreground">
+                        {verification.verified
+                          ? verification.source === 'admin'
+                            ? 'موثّق (من الأدمن)'
+                            : 'موثّق (تلقائي)'
+                          : 'غير موثّق'}
+                      </span>
+                    </p>
+                    <ul className="space-y-1 list-disc pr-4">
+                      <li>
+                        عروض السعر: {verification.stats.offersCount} / مطلوب أكثر من{' '}
+                        {VERIFIED_MIN_OFFERS}
+                      </li>
+                      <li>
+                        تقييمات فوق 4 نجوم: {verification.stats.highReviewsCount} / مطلوب أكثر من{' '}
+                        {VERIFIED_MIN_HIGH_REVIEWS}
+                      </li>
+                      <li>
+                        البلاغات: {verification.stats.reportsCount} / الحد الأقصى{' '}
+                        {VERIFIED_MAX_REPORTS} (عند التجاوز تختفي العلامة التلقائية)
+                      </li>
+                    </ul>
+                    {verification.stats.reportsCount > VERIFIED_MAX_REPORTS && (
+                      <p className="text-amber-700 bg-amber-50 rounded-lg p-2">
+                        تجاوز البلاغات الحد. راجع البلاغات ثم فعّل التوثيق يدوياً إن لزم، أو انتظر
+                        استيفاء الشروط من جديد بعد انخفاض البلاغات.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  {selected.admin_verified ? (
+                    <button
+                      onClick={() => void patchUser(selected.id, { admin_verified: false })}
+                      className="h-10 px-3 rounded-xl border text-sm"
+                    >
+                      إلغاء توثيق الأدمن
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => void patchUser(selected.id, { admin_verified: true })}
+                      className="h-10 px-3 rounded-xl bg-[#1D9BF0] text-white text-sm inline-flex items-center gap-1"
+                    >
+                      <BadgeCheck className="w-4 h-4" /> تفعيل التوثيق
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 

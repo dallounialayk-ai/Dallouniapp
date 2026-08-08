@@ -90,3 +90,22 @@ $$;
 create index if not exists idx_profiles_role_created on public.profiles (role, created_at desc);
 create index if not exists idx_profiles_approved on public.profiles (role, is_approved) where role = 'provider';
 create index if not exists idx_reports_status on public.reports (status, created_at desc);
+
+-- علامة التوثيق الزرقاء (أدمن / تلقائي حسب الشروط في التطبيق)
+alter table public.profiles
+  add column if not exists admin_verified boolean not null default false;
+
+create index if not exists idx_profiles_admin_verified
+  on public.profiles (admin_verified)
+  where role = 'provider' and admin_verified = true;
+
+-- مهلة انتهاء طلب الخدمة
+alter table public.service_requests
+  add column if not exists deadline_days integer;
+
+alter table public.service_requests
+  add column if not exists expires_at timestamptz;
+
+create index if not exists idx_service_requests_open_expires
+  on public.service_requests (expires_at asc)
+  where status = 'open';

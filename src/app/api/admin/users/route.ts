@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi, adminUnauthorized } from '@/lib/admin-auth';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { getDescendantLeafIds, getCategoryMeta } from '@/lib/constants';
 
 export async function GET(req: NextRequest) {
   if (!(await requireAdminApi())) return adminUnauthorized();
@@ -29,7 +30,16 @@ export async function GET(req: NextRequest) {
     if (blocked === 'true') query = query.eq('is_blocked', true);
     if (blocked === 'false') query = query.eq('is_blocked', false);
     if (governorate) query = query.eq('governorate', governorate);
-    if (category) query = query.eq('service_category', category);
+    if (category) {
+      const meta = getCategoryMeta(category);
+      if (meta?.kind === 'leaf') {
+        query = query.eq('service_category', category);
+      } else {
+        const leaves = getDescendantLeafIds(category);
+        const ids = Array.from(new Set([...leaves, category]));
+        query = query.in('service_category', ids);
+      }
+    }
 
     if (q) {
       query = query.or(

@@ -15,8 +15,9 @@ import {
 import { toast } from 'sonner';
 import { supabase, type ServiceRequest } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
-import { SERVICE_CATEGORIES, YEMEN_GOVERNORATES, getCategoryName } from '@/lib/constants';
-import { formatRelativeTime } from '@/lib/utils';
+import { YEMEN_GOVERNORATES, getCategoryName, getCategoryPath, getCategoryGroupId, getDescendantLeafIds, REQUEST_DEADLINE_OPTIONS, computeExpiresAt, getDeadlineLabel, type RequestDeadlineDays } from '@/lib/constants';
+import { ServiceCategoryPicker } from '@/components/shared/ServiceCategoryPicker';
+import { formatRelativeTime, formatDeadlineRemaining } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import {
   getCurrentPosition,
@@ -41,6 +42,7 @@ export function UserRequestTab({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [governorate, setGovernorate] = useState(profile?.governorate ?? '');
+  const [deadlineDays, setDeadlineDays] = useState<RequestDeadlineDays | ''>('');
   const [submitting, setSubmitting] = useState(false);
   const [myRequests, setMyRequests] = useState<ServiceRequest[]>([]);
   const [loadingList, setLoadingList] = useState(false);
@@ -152,6 +154,10 @@ export function UserRequestTab({
       toast.error('الرجاء اختيار المحافظة');
       return;
     }
+    if (!deadlineDays) {
+      toast.error('الرجاء اختيار مهلة الطلب');
+      return;
+    }
 
     let finalLat = location?.lat ?? null;
     let finalLng = location?.lng ?? null;
@@ -175,6 +181,8 @@ export function UserRequestTab({
     }
 
     setSubmitting(true);
+    const now = new Date();
+    const expiresAt = computeExpiresAt(now, deadlineDays);
     const { data, error } = await supabase
       .from('service_requests')
       .insert({
@@ -186,6 +194,8 @@ export function UserRequestTab({
         latitude: finalLat,
         longitude: finalLng,
         location_label: finalLabel,
+        deadline_days: deadlineDays,
+        expires_at: expiresAt.toISOString(),
       })
       .select('*')
       .single();
@@ -196,11 +206,16 @@ export function UserRequestTab({
       return;
     }
 
+    const groupId = getCategoryGroupId(category);
+    const relatedCategories = groupId
+      ? Array.from(new Set([...getDescendantLeafIds(groupId), category]))
+      : [category];
+
     const { data: providers } = await supabase
       .from('profiles')
       .select('id')
       .eq('role', 'provider')
-      .eq('service_category', category);
+      .in('service_category', relatedCategories);
     if (providers && providers.length > 0) {
       const providerIds = providers.map((p) => p.id);
       await supabase.rpc('create_notifications_batch', {
@@ -216,6 +231,7 @@ export function UserRequestTab({
     setCategory('');
     setTitle('');
     setDescription('');
+    setDeadlineDays('');
     setSubmitting(false);
     if (showList) loadMyRequests();
   };
@@ -269,9 +285,9 @@ export function UserRequestTab({
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{r.description}</p>
-                    <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground flex-wrap">
                       <Badge variant="outline" className="text-[10px]">
-                        {getCategoryName(r.category)}
+                        {getCategoryPath(r.category)}
                       </Badge>
                       <span className="flex items-center gap-0.5">
                         <MapPin className="w-2.5 h-2.5" />
@@ -281,6 +297,12 @@ export function UserRequestTab({
                         <Clock className="w-2.5 h-2.5" />
                         {formatRelativeTime(r.created_at)}
                       </span>
+                      {r.expires_at && (
+                        <span className="flex items-center gap-0.5 text-sky-700 font-medium">
+                          <Clock className="w-2.5 h-2.5" />
+                          {formatDeadlineRemaining(r.expires_at)?.text ?? getDeadlineLabel(r.deadline_days)}
+                        </span>
+                      )}
                     </div>
                   </button>
                 ))
@@ -304,16 +326,14 @@ export function UserRequestTab({
 
               <div>
                 <Label className="text-xs font-medium text-muted-foreground">نوع الخدمة *</Label>
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="mt-1 h-12 rounded-xl bg-muted/40 border-border/60">
-                    <SelectValue placeholder="اختر نوع الخدمة" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {SERVICE_CATEGORIES.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1">
+                  <ServiceCategoryPicker
+                    value={category}
+                    onChange={setCategory}
+                    mode="select"
+                    placeholder="اختر التصنيف ثم التخصص"
+                  />
+                </div>
               </div>
 
               <div>
@@ -354,6 +374,28 @@ export function UserRequestTab({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">مهلة الطلب *</Label>
+                <Select
+                  value={deadlineDays === '' ? undefined : String(deadlineDays)}
+                  onValueChange={(v) => setDeadlineDays(Number(v) as RequestDeadlineDays)}
+                >
+                  <SelectTrigger className="mt-1 h-12 rounded-xl bg-muted/40 border-border/60">
+                    <SelectValue placeholder="اختر مدة بقاء الطلب مفتوحاً" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REQUEST_DEADLINE_OPTIONS.map((o) => (
+                      <SelectItem key={o.days} value={String(o.days)}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
+                  عند انتهاء المهلة يُغلق الطلب تلقائياً ويخرج من قائمة الطلبات المفتوحة.
+                </p>
               </div>
 
               {governorate && (
