@@ -538,7 +538,7 @@ function RegisterForm({
             <div className="flex items-center justify-between gap-2 px-0.5">
               <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <Navigation className="w-3.5 h-3.5 text-primary" />
-                موقعك على الخريطة
+                مكان تواجدك للعمل
               </div>
               {locating ? (
                 <span className="text-[11px] text-muted-foreground flex items-center gap-1">
@@ -548,7 +548,7 @@ function RegisterForm({
               ) : locationStatus === 'ok' ? (
                 <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" />
-                  تم تحديد موقعك
+                  تم تحديد مكان تواجدك
                 </span>
               ) : (
                 <button

@@ -79,6 +79,35 @@ export async function PATCH(req: NextRequest) {
     const db = getSupabaseAdmin();
     const { data, error } = await db.from('reports').update(patch).eq('id', id).select('*').single();
     if (error) throw error;
+
+    if (data && (body.status === 'resolved' || body.status === 'dismissed' || body.status === 'reviewed')) {
+      const statusLabel =
+        body.status === 'resolved' ? 'تم حل البلاغ' :
+        body.status === 'dismissed' ? 'تم رفض البلاغ' : 'تم مراجعة البلاغ';
+      const note = typeof body.admin_note === 'string' && body.admin_note.trim()
+        ? ` ملاحظة الإدارة: ${body.admin_note.trim()}`
+        : '';
+
+      const rows = [
+        {
+          user_id: data.reporter_id as string,
+          type: 'report_resolved',
+          title: statusLabel,
+          body: `تم تحديث حالة بلاغك.${note}`,
+          data: { report_id: data.id, action: 'profile' },
+        },
+        {
+          user_id: data.reported_id as string,
+          type: 'report_resolved',
+          title: 'تحديث بخصوص بلاغ على حسابك',
+          body: `${statusLabel}.${note}`,
+          data: { report_id: data.id, action: 'profile' },
+        },
+      ].filter((r) => r.user_id);
+
+      if (rows.length) await db.from('notifications').insert(rows);
+    }
+
     return NextResponse.json({ item: data });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'تعذّر تحديث البلاغ';

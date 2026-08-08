@@ -1,7 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { Bell, X, CheckCheck, Trash2, MessageCircle, CircleDollarSign, FileText, Sparkles } from 'lucide-react';
+import { useEffect } from 'react';
+import {
+  Bell, X, CheckCheck, Trash2, MessageCircle, CircleDollarSign,
+  FileText, Sparkles, BadgeCheck, Flag, Ban, Clock, Star,
+} from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet';
@@ -9,72 +12,35 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { supabase, type AppNotification } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
+import { useNotifications } from '@/store/notifications';
 import { formatRelativeTime } from '@/lib/utils';
 
+export type NotificationNavigateTarget =
+  | { kind: 'request'; requestId: string }
+  | { kind: 'chat'; peerId: string }
+  | { kind: 'provider'; providerId: string }
+  | { kind: 'profile' }
+  | { kind: 'none' };
+
 export function NotificationsSheet({
-  open, onOpenChange,
+  open,
+  onOpenChange,
+  onNavigate,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  onNavigate?: (target: NotificationNavigateTarget) => void;
 }) {
   const { profile } = useAuth();
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!profile) return;
-    setLoading(true);
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', profile.id)
-      .eq('read', false)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    setNotifications((data ?? []) as AppNotification[]);
-    setLoading(false);
-  }, [profile]);
+  const { items, loading, loadItems, markRead, markAllRead, loadUnreadCount } =
+    useNotifications();
 
   useEffect(() => {
-    if (open && profile) load();
-  }, [open, profile, load]);
-
-  // Realtime subscribe
-  useEffect(() => {
-    if (!profile) return;
-    const channel = supabase
-      .channel(`notifications-${profile.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${profile.id}`,
-        },
-        (payload) => {
-          const n = payload.new as AppNotification;
-          setNotifications((prev) => [n, ...prev]);
-          toast(n.title, { description: n.body });
-        }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [profile]);
-
-  const handleMarkAllRead = async () => {
-    if (!profile) return;
-    await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('user_id', profile.id)
-      .eq('read', false);
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
+    if (open && profile) void loadItems(profile.id);
+  }, [open, profile, loadItems]);
 
   const handleClear = async () => {
     if (!profile) return;
-    // Soft-clear: mark all as read (DELETE قد يكون محظورًا بـ RLS)
     const { error } = await supabase
       .from('notifications')
       .update({ read: true })
@@ -83,7 +49,8 @@ export function NotificationsSheet({
       toast.error(error.message || 'تعذّر مسح الإشعارات');
       return;
     }
-    setNotifications([]);
+    await loadItems(profile.id);
+    await loadUnreadCount(profile.id);
   };
 
   return (
@@ -108,12 +75,12 @@ export function NotificationsSheet({
           <SheetDescription className="sr-only">عرض الإشعارات</SheetDescription>
         </SheetHeader>
 
-        {notifications.length > 0 && (
+        {items.length > 0 && (
           <div className="px-5 py-2 flex items-center gap-2 border-b border-border/30 shrink-0">
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleMarkAllRead}
+              onClick={() => profile && void markAllRead(profile.id)}
               className="h-8 rounded-lg text-xs"
             >
               <CheckCheck className="w-3.5 h-3.5 ml-1.5" />
@@ -122,7 +89,7 @@ export function NotificationsSheet({
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleClear}
+              onClick={() => void handleClear()}
               className="h-8 rounded-lg text-xs text-destructive hover:text-destructive mr-auto"
             >
               <Trash2 className="w-3.5 h-3.5 ml-1.5" />
@@ -135,22 +102,27 @@ export function NotificationsSheet({
           <div className="p-4 space-y-2 pb-8">
             {loading ? (
               <p className="text-center text-sm text-muted-foreground py-8">جاري التحميل…</p>
-            ) : notifications.length === 0 ? (
+            ) : items.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto mb-2">
                   <Bell className="w-6 h-6 text-muted-foreground" />
                 </div>
                 <p className="text-sm font-medium">لا توجد إشعارات</p>
-                <p className="text-xs text-muted-foreground mt-1">ستظهر هنا عند وصول رسالة أو عرض جديد</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  ستظهر هنا الرسائل والعروض وتحديثات طلباتك
+                </p>
               </div>
             ) : (
-              notifications.map((n) => (
+              items.map((n) => (
                 <NotifRow
                   key={n.id}
                   notif={n}
-                  onRead={(id) =>
-                    setNotifications((prev) => prev.filter((x) => x.id !== id))
-                  }
+                  onOpen={async () => {
+                    if (!n.read) await markRead(n.id);
+                    const target = resolveNavigateTarget(n);
+                    onOpenChange(false);
+                    onNavigate?.(target);
+                  }}
                 />
               ))
             )}
@@ -161,41 +133,106 @@ export function NotificationsSheet({
   );
 }
 
+export function NotifBadge() {
+  const unreadCount = useNotifications((s) => s.unreadCount);
+  if (unreadCount <= 0) return null;
+  const label = unreadCount > 99 ? '99+' : String(unreadCount);
+  return (
+    <span className="absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-white text-[10px] font-bold flex items-center justify-center border-2 border-background">
+      {label}
+    </span>
+  );
+}
+
+/** يشغّل الاشتراك والعدّاد + توست عند وصول إشعار جديد */
+export function NotificationsBootstrap() {
+  const { profile } = useAuth();
+  const subscribe = useNotifications((s) => s.subscribe);
+  const unsubscribe = useNotifications((s) => s.unsubscribe);
+
+  useEffect(() => {
+    if (!profile?.id) {
+      unsubscribe();
+      return;
+    }
+    subscribe(profile.id);
+
+    // توست منفصل عبر قناة خفيفة
+    const channel = supabase
+      .channel(`notif-toast-${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${profile.id}`,
+        },
+        (payload) => {
+          const n = payload.new as AppNotification;
+          toast(n.title, { description: n.body || undefined });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      unsubscribe();
+    };
+  }, [profile?.id, subscribe, unsubscribe]);
+
+  return null;
+}
+
+function resolveNavigateTarget(n: AppNotification): NotificationNavigateTarget {
+  const data = (n.data ?? {}) as Record<string, unknown>;
+  const action = String(data.action ?? '');
+  const requestId = typeof data.request_id === 'string' ? data.request_id : null;
+  const peerId =
+    typeof data.from === 'string'
+      ? data.from
+      : typeof data.peer_id === 'string'
+        ? data.peer_id
+        : typeof data.provider_id === 'string'
+          ? data.provider_id
+          : null;
+  const providerId = typeof data.provider_id === 'string' ? data.provider_id : null;
+
+  if (action === 'profile' || n.type === 'admin_verified' || n.type === 'auto_verified' || n.type === 'admin_approval') {
+    return { kind: 'profile' };
+  }
+  if (n.type === 'message' && peerId) return { kind: 'chat', peerId };
+  if (
+    (n.type === 'offer' ||
+      n.type === 'offer_accepted' ||
+      n.type === 'offer_rejected' ||
+      n.type === 'new_request' ||
+      n.type === 'request_closed' ||
+      n.type === 'request_expired') &&
+    requestId
+  ) {
+    return { kind: 'request', requestId };
+  }
+  if (providerId && (action === 'provider' || n.type === 'report_resolved')) {
+    return { kind: 'provider', providerId };
+  }
+  if (requestId) return { kind: 'request', requestId };
+  if (peerId) return { kind: 'chat', peerId };
+  return { kind: 'none' };
+}
+
 function NotifRow({
   notif,
-  onRead,
+  onOpen,
 }: {
   notif: AppNotification;
-  onRead: (id: string) => void;
+  onOpen: () => void;
 }) {
-  const icon = (() => {
-    switch (notif.type) {
-      case 'message': return <MessageCircle className="w-4 h-4" />;
-      case 'offer': case 'offer_accepted': case 'offer_rejected': return <CircleDollarSign className="w-4 h-4" />;
-      case 'new_request': return <FileText className="w-4 h-4" />;
-      default: return <Sparkles className="w-4 h-4" />;
-    }
-  })();
-  const iconBg = (() => {
-    switch (notif.type) {
-      case 'message': return 'bg-blue-100 text-blue-600';
-      case 'offer': case 'offer_accepted': return 'bg-emerald-100 text-emerald-600';
-      case 'offer_rejected': return 'bg-red-100 text-red-600';
-      case 'new_request': return 'bg-amber-100 text-amber-600';
-      default: return 'bg-purple-100 text-purple-600';
-    }
-  })();
-
-  const handleMarkRead = async () => {
-    if (!notif.read) {
-      await supabase.from('notifications').update({ read: true }).eq('id', notif.id);
-      onRead(notif.id);
-    }
-  };
+  const { icon, iconBg } = getNotifVisual(notif.type);
 
   return (
     <button
-      onClick={handleMarkRead}
+      onClick={onOpen}
       className={`w-full text-right p-3 rounded-2xl border transition-all flex items-start gap-3 ${
         notif.read
           ? 'bg-card border-border/40'
@@ -221,4 +258,34 @@ function NotifRow({
       </div>
     </button>
   );
+}
+
+function getNotifVisual(type: string) {
+  switch (type) {
+    case 'message':
+      return { icon: <MessageCircle className="w-4 h-4" />, iconBg: 'bg-sky-100 text-sky-700' };
+    case 'offer':
+    case 'offer_accepted':
+      return { icon: <CircleDollarSign className="w-4 h-4" />, iconBg: 'bg-emerald-100 text-emerald-700' };
+    case 'offer_rejected':
+      return { icon: <CircleDollarSign className="w-4 h-4" />, iconBg: 'bg-red-100 text-red-700' };
+    case 'new_request':
+      return { icon: <FileText className="w-4 h-4" />, iconBg: 'bg-amber-100 text-amber-800' };
+    case 'request_expired':
+    case 'request_closed':
+      return { icon: <Clock className="w-4 h-4" />, iconBg: 'bg-orange-100 text-orange-800' };
+    case 'admin_verified':
+    case 'auto_verified':
+      return { icon: <BadgeCheck className="w-4 h-4" />, iconBg: 'bg-sky-100 text-[#1D9BF0]' };
+    case 'admin_blocked':
+    case 'admin_unapproved':
+      return { icon: <Ban className="w-4 h-4" />, iconBg: 'bg-red-100 text-red-700' };
+    case 'report_received':
+    case 'report_resolved':
+      return { icon: <Flag className="w-4 h-4" />, iconBg: 'bg-rose-100 text-rose-700' };
+    case 'rating_updated':
+      return { icon: <Star className="w-4 h-4" />, iconBg: 'bg-amber-100 text-amber-700' };
+    default:
+      return { icon: <Sparkles className="w-4 h-4" />, iconBg: 'bg-muted text-foreground' };
+  }
 }

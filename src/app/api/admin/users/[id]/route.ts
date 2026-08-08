@@ -4,6 +4,25 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 type Ctx = { params: Promise<{ id: string }> };
 
+async function insertNotif(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  row: {
+    user_id: string;
+    type: string;
+    title: string;
+    body: string;
+    data?: Record<string, unknown>;
+  }
+) {
+  await db.from('notifications').insert({
+    user_id: row.user_id,
+    type: row.type,
+    title: row.title,
+    body: row.body,
+    data: row.data ?? { source: 'admin' },
+  });
+}
+
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (!(await requireAdminApi())) return adminUnauthorized();
   const { id } = await ctx.params;
@@ -34,6 +53,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
   try {
     const db = getSupabaseAdmin();
+    const { data: before } = await db.from('profiles').select('*').eq('id', id).maybeSingle();
     const { data, error } = await db
       .from('profiles')
       .update(patch)
@@ -43,24 +63,70 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     if (error) throw error;
 
-    // إشعار عند الموافقة
     if (patch.is_approved === true && data?.role === 'provider') {
-      await db.from('notifications').insert({
+      await insertNotif(db, {
         user_id: id,
         type: 'admin_approval',
         title: 'تمت الموافقة على حسابك',
         body: 'يمكنك الآن استخدام حساب مقدم الخدمة بالكامل.',
-        data: { source: 'admin' },
+        data: { source: 'admin', action: 'profile' },
+      });
+    }
+    if (patch.is_approved === false && data?.role === 'provider' && before?.is_approved !== false) {
+      await insertNotif(db, {
+        user_id: id,
+        type: 'admin_unapproved',
+        title: 'تم إيقاف تفعيل حسابك',
+        body: 'أوقفت الإدارة تفعيل حساب مقدم الخدمة. تواصل مع الدعم إن لزم.',
+        data: { source: 'admin', action: 'profile' },
       });
     }
 
     if (patch.admin_verified === true && data?.role === 'provider') {
-      await db.from('notifications').insert({
+      await insertNotif(db, {
         user_id: id,
         type: 'admin_verified',
         title: 'تم توثيق حسابك',
         body: 'ظهرت علامة التوثيق الزرقاء على بطاقتك وملفك الشخصي.',
-        data: { source: 'admin' },
+        data: { source: 'admin', action: 'profile' },
+      });
+    }
+    if (patch.admin_verified === false && before?.admin_verified) {
+      await insertNotif(db, {
+        user_id: id,
+        type: 'admin_unverified',
+        title: 'تم إلغاء توثيق حسابك',
+        body: 'أزالت الإدارة علامة التوثيق من حسابك.',
+        data: { source: 'admin', action: 'profile' },
+      });
+    }
+
+    if (patch.is_blocked === true) {
+      await insertNotif(db, {
+        user_id: id,
+        type: 'admin_blocked',
+        title: 'تم حظر حسابك',
+        body: 'حظرت الإدارة حسابك مؤقتاً. لن تتمكن من استخدام التطبيق حتى يُرفع الحظر.',
+        data: { source: 'admin', action: 'profile' },
+      });
+    }
+    if (patch.is_blocked === false && before?.is_blocked) {
+      await insertNotif(db, {
+        user_id: id,
+        type: 'admin_unblocked',
+        title: 'تم رفع الحظر عن حسابك',
+        body: 'يمكنك الآن استخدام التطبيق مجدداً.',
+        data: { source: 'admin', action: 'profile' },
+      });
+    }
+
+    if (patch.rating_override !== undefined && patch.rating_override !== null && data?.role === 'provider') {
+      await insertNotif(db, {
+        user_id: id,
+        type: 'rating_updated',
+        title: 'تم تحديث تقييمك من الإدارة',
+        body: `ضبطت الإدارة تقييم حسابك إلى ${patch.rating_override} نجوم.`,
+        data: { source: 'admin', action: 'profile' },
       });
     }
 

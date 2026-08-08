@@ -23,7 +23,7 @@ export default function PrivacyPage() {
         <section className="space-y-2">
           <h2 className="text-base font-semibold">1. البيانات التي نجمعها</h2>
           <ul className="list-disc pr-5 text-sm text-muted-foreground space-y-1.5 leading-relaxed">
-            <li>بيانات الحساب: الاسم، البريد الإلكتروني، رقم الهاتف، وواتساب إن أضفته.</li>
+            <li>بيانات الحساب: الاسم، رقم الهاتف، وواتساب إن أضفته.</li>
             <li>بيانات الملف الشخصي: المحافظة، نبذة تعريفية، صورة شخصية، وأعمال/منتجات سابقة.</li>
             <li>
               بيانات الموقع: إحداثيات تقريبية أو دقيقة عند موافقتك، لعرض الخدمات القريبة

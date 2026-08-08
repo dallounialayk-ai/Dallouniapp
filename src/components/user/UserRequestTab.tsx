@@ -15,7 +15,16 @@ import {
 import { toast } from 'sonner';
 import { supabase, type ServiceRequest } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
-import { YEMEN_GOVERNORATES, getCategoryName, getCategoryPath, getCategoryGroupId, getDescendantLeafIds, REQUEST_DEADLINE_OPTIONS, computeExpiresAt, getDeadlineLabel, type RequestDeadlineDays } from '@/lib/constants';
+import {
+  YEMEN_GOVERNORATES,
+  getCategoryPath,
+  getCategoryGroupId,
+  matchesCategoryFilter,
+  REQUEST_DEADLINE_OPTIONS,
+  computeExpiresAt,
+  getDeadlineLabel,
+  type RequestDeadlineDays,
+} from '@/lib/constants';
 import { ServiceCategoryPicker } from '@/components/shared/ServiceCategoryPicker';
 import { formatRelativeTime, formatDeadlineRemaining } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -206,25 +215,28 @@ export function UserRequestTab({
       return;
     }
 
-    const groupId = getCategoryGroupId(category);
-    const relatedCategories = groupId
-      ? Array.from(new Set([...getDescendantLeafIds(groupId), category]))
-      : [category];
-
+    const groupId = getCategoryGroupId(category) ?? category;
     const { data: providers } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, governorate, service_category, is_approved, is_blocked')
       .eq('role', 'provider')
-      .in('service_category', relatedCategories);
-    if (providers && providers.length > 0) {
-      const providerIds = providers.map((p) => p.id);
-      await supabase.rpc('create_notifications_batch', {
-        p_user_ids: providerIds,
-        p_type: 'new_request',
-        p_title: 'طلب خدمة جديد في مجالك',
-        p_body: `${title.trim()} — ${governorate}`,
-        p_data: { request_id: (data as ServiceRequest).id },
-      });
+      .eq('governorate', governorate)
+      .neq('is_blocked', true)
+      .neq('is_approved', false);
+
+    const providerIds = (providers ?? [])
+      .filter((p) => matchesCategoryFilter(p.service_category, groupId))
+      .map((p) => p.id);
+
+    if (providerIds.length > 0) {
+      const { notifyMany } = await import('@/lib/notifications');
+      await notifyMany(
+        providerIds,
+        'new_request',
+        'طلب خدمة جديد في مجالك',
+        `${title.trim()} — ${governorate}`,
+        { request_id: (data as ServiceRequest).id, action: 'request' }
+      );
     }
 
     toast.success('تم نشر طلبك بنجاح، ستصلك العروض قريبًا');

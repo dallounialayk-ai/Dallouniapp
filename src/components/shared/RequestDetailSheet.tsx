@@ -26,6 +26,7 @@ import { isValidCoords, reverseGeocode, getGovernorateCenter } from '@/lib/geo';
 import { RequestLocationMap } from '@/components/shared/ProvidersMapDynamic';
 import { VerifiedBadge } from '@/components/shared/VerifiedBadge';
 import { fetchProviderVerification } from '@/lib/verification';
+import { notifyUser, notifyMany, maybeNotifyAutoVerified } from '@/lib/notifications';
 
 export function RequestDetailSheet({
   request, requestOwner, open, onOpenChange, onOpenChat, onOfferSubmitted,
@@ -194,14 +195,14 @@ export function RequestDetailSheet({
       return;
     }
 
-    // Notify the request owner (via RPC to bypass RLS)
-    await supabase.rpc('create_notification', {
-      p_user_id: request.user_id,
-      p_type: 'offer',
-      p_title: 'عرض سعر جديد',
-      p_body: `${profile.full_name} قدّم عرضًا على طلبك "${request.title}"`,
-      p_data: { request_id: request.id },
+    await notifyUser({
+      userId: request.user_id,
+      type: 'offer',
+      title: 'عرض سعر جديد',
+      body: `${profile.full_name} قدّم عرضًا على طلبك "${request.title}"`,
+      data: { request_id: request.id, provider_id: profile.id, action: 'request' },
     });
+    void maybeNotifyAutoVerified(profile.id);
 
     toast.success('تم تقديم عرضك بنجاح');
     setOfferOpen(false);
@@ -214,6 +215,14 @@ export function RequestDetailSheet({
 
   const handleAcceptOffer = async (offer: Offer) => {
     if (!request) return;
+
+    const { data: otherPending } = await supabase
+      .from('offers')
+      .select('provider_id')
+      .eq('request_id', request.id)
+      .eq('status', 'pending')
+      .neq('id', offer.id);
+
     const { error } = await supabase
       .from('offers')
       .update({ status: 'accepted' })
@@ -222,7 +231,7 @@ export function RequestDetailSheet({
       toast.error(error.message);
       return;
     }
-    // رفض باقي العروض المعلقة وإغلاق الطلب
+
     await supabase
       .from('offers')
       .update({ status: 'rejected' })
@@ -234,14 +243,25 @@ export function RequestDetailSheet({
       .update({ status: 'closed' })
       .eq('id', request.id);
 
-    // Notify provider of acceptance (via RPC to bypass RLS)
-    await supabase.rpc('create_notification', {
-      p_user_id: offer.provider_id,
-      p_type: 'offer_accepted',
-      p_title: 'تم قبول عرضك',
-      p_body: `تم قبول عرضك على الطلب "${request.title}"`,
-      p_data: { request_id: request.id },
+    await notifyUser({
+      userId: offer.provider_id,
+      type: 'offer_accepted',
+      title: 'تم قبول عرضك',
+      body: `تم قبول عرضك على الطلب "${request.title}". تواصل مع صاحب الطلب لإتمام الخدمة.`,
+      data: { request_id: request.id, action: 'request' },
     });
+
+    const rejectedIds = (otherPending ?? []).map((o) => o.provider_id);
+    if (rejectedIds.length > 0) {
+      await notifyMany(
+        rejectedIds,
+        'offer_rejected',
+        'تم اختيار عرض آخر',
+        `أُغلق الطلب "${request.title}" بعد قبول عرض مقدّم خدمة آخر.`,
+        { request_id: request.id, action: 'request' }
+      );
+    }
+
     toast.success('تم قبول العرض');
     loadOffers();
     onOfferSubmitted?.();
@@ -256,13 +276,12 @@ export function RequestDetailSheet({
       toast.error(error.message);
       return;
     }
-    // Notify provider of rejection (via RPC to bypass RLS)
-    await supabase.rpc('create_notification', {
-      p_user_id: offer.provider_id,
-      p_type: 'offer_rejected',
-      p_title: 'تم رفض عرضك',
-      p_body: `تم رفض عرضك على الطلب "${request?.title}"`,
-      p_data: { request_id: request?.id },
+    await notifyUser({
+      userId: offer.provider_id,
+      type: 'offer_rejected',
+      title: 'تم رفض عرضك',
+      body: `تم رفض عرضك على الطلب "${request?.title}"`,
+      data: { request_id: request?.id, action: 'request' },
     });
     toast.success('تم رفض العرض');
     loadOffers();
@@ -284,6 +303,13 @@ export function RequestDetailSheet({
       toast.error(error.message);
       return;
     }
+    await notifyUser({
+      userId: request.user_id,
+      type: 'report_received',
+      title: 'بلاغ جديد على حسابك',
+      body: 'تم استلام بلاغ بخصوص حسابك وسيراجعه فريق الإدارة.',
+      data: { action: 'profile' },
+    });
     toast.success('تم إرسال البلاغ، شكرًا لك');
     setReportOpen(false);
     setReportReason('');

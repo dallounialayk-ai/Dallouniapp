@@ -1,14 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Home, User, Bell } from 'lucide-react';
+import { toast } from 'sonner';
 import { ProviderHomeTab } from '@/components/provider/ProviderHomeTab';
 import { ProviderProfileTab } from '@/components/provider/ProviderProfileTab';
 import { RequestDetailSheet } from '@/components/shared/RequestDetailSheet';
 import { ChatSheet } from '@/components/shared/ChatSheet';
-import { NotificationsSheet } from '@/components/shared/NotificationsSheet';
-import type { Profile, ServiceRequest } from '@/lib/supabase';
+import {
+  NotificationsSheet,
+  NotificationsBootstrap,
+  NotifBadge,
+  type NotificationNavigateTarget,
+} from '@/components/shared/NotificationsSheet';
+import { supabase, type Profile, type ServiceRequest } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
+import { expireDueRequestsClient, maybeNotifyAutoVerified } from '@/lib/notifications';
 
 type Tab = 'home' | 'profile';
 
@@ -22,7 +29,10 @@ export function ProviderApp() {
   const [chatOpen, setChatOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
-  if (!profile) return null;
+  useEffect(() => {
+    void expireDueRequestsClient();
+    if (profile?.id) void maybeNotifyAutoVerified(profile.id);
+  }, [profile?.id]);
 
   const handleOpenRequest = (r: ServiceRequest, owner?: Profile) => {
     setSelectedRequest(r);
@@ -36,14 +46,62 @@ export function ProviderApp() {
     setRequestSheetOpen(false);
   };
 
+  const handleNotifNavigate = useCallback(async (target: NotificationNavigateTarget) => {
+    if (target.kind === 'none') return;
+    if (target.kind === 'profile') {
+      setTab('profile');
+      return;
+    }
+    if (target.kind === 'request') {
+      const { data: req, error } = await supabase
+        .from('service_requests')
+        .select('*, profile:profiles!user_id(*)')
+        .eq('id', target.requestId)
+        .maybeSingle();
+      if (error || !req) {
+        toast.error('تعذّر فتح الطلب');
+        return;
+      }
+      const { profile: owner, ...rest } = req as ServiceRequest & { profile?: Profile };
+      setSelectedRequest(rest);
+      setSelectedRequestOwner(owner ?? null);
+      setRequestSheetOpen(true);
+      setTab('home');
+      return;
+    }
+    if (target.kind === 'chat') {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', target.peerId)
+        .maybeSingle();
+      if (error || !data) {
+        toast.error('تعذّر فتح المحادثة');
+        return;
+      }
+      handleOpenChat(data as Profile);
+    }
+  }, []);
+
+  if (!profile) return null;
+
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0 w-full overflow-x-hidden bg-background">
+      <NotificationsBootstrap />
       <header className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40">
         <div className="flex items-center gap-2.5 min-w-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="" width={36} height={36} className="w-9 h-9 object-contain shrink-0" />
+          <span className="relative w-9 h-9 shrink-0 rounded-full bg-white border border-border/60 shadow-sm ring-1 ring-primary/10 flex items-center justify-center overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt=""
+              width={28}
+              height={28}
+              className="w-7 h-7 object-contain"
+            />
+          </span>
           <div className="min-w-0">
-            <div className="text-[10px] text-muted-foreground">دلّوني عليك</div>
+            <div className="text-sm font-semibold text-foreground/90 truncate">دلّوني عليك</div>
             <div className="font-bold text-base leading-tight">
               {tab === 'home' ? 'طلبات الخدمة' : 'الملف الشخصي'}
             </div>
@@ -51,9 +109,10 @@ export function ProviderApp() {
         </div>
         <button
           onClick={() => setNotifOpen(true)}
-          className="w-10 h-10 rounded-full bg-muted/40 flex items-center justify-center hover:bg-muted transition-colors"
+          className="w-10 h-10 rounded-full bg-muted/40 flex items-center justify-center hover:bg-muted transition-colors relative"
         >
           <Bell className="w-5 h-5" />
+          <NotifBadge />
         </button>
       </header>
 
@@ -87,7 +146,11 @@ export function ProviderApp() {
         onOpenChat={handleOpenChat}
       />
       <ChatSheet peer={chatPeer} open={chatOpen} onOpenChange={setChatOpen} />
-      <NotificationsSheet open={notifOpen} onOpenChange={setNotifOpen} />
+      <NotificationsSheet
+        open={notifOpen}
+        onOpenChange={setNotifOpen}
+        onNavigate={(t) => void handleNotifNavigate(t)}
+      />
     </div>
   );
 }

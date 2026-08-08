@@ -109,3 +109,7 @@ alter table public.service_requests
 create index if not exists idx_service_requests_open_expires
   on public.service_requests (expires_at asc)
   where status = 'open';
+
+-- ملاحظة: نفّذ أيضاً إن لم تكن موجودة:
+-- download/create-notification-rpc-v2.sql
+-- download/expire-due-requests.sql

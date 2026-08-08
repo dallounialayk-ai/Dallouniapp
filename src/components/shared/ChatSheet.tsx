@@ -259,16 +259,14 @@ export function ChatSheet({
         });
       }
 
-      // إنشاء إشعار للطرف الآخر (عبر RPC function لتجاوز RLS)
-      supabase
-        .rpc('create_notification', {
-          p_user_id: peer.id,
-          p_type: 'message',
-          p_title: 'رسالة جديدة',
-          p_body: `${profile.full_name}: ${text.slice(0, 60)}`,
-          p_data: { from: profile.id },
-        })
-        .then(() => {});
+      const { notifyUser } = await import('@/lib/notifications');
+      void notifyUser({
+        userId: peer.id,
+        type: 'message',
+        title: 'رسالة جديدة',
+        body: `${profile.full_name}: ${text.slice(0, 60)}`,
+        data: { from: profile.id, peer_id: profile.id, action: 'chat' },
+      });
     } catch (e: any) {
       toast.error(e.message || 'تعذّر إرسال الرسالة');
       // إعادة الرسالة للحقل + حذف الرسالة المؤقتة

@@ -141,6 +141,16 @@ export function ProviderDetailSheet({
       return;
     }
 
+    const { notifyUser, maybeNotifyAutoVerified } = await import('@/lib/notifications');
+    await notifyUser({
+      userId: provider.id,
+      type: 'rating_updated',
+      title: 'تقييم جديد على ملفك',
+      body: `${profile.full_name} قيّمك بـ ${rating} نجوم.`,
+      data: { provider_id: provider.id, action: 'profile' },
+    });
+    void maybeNotifyAutoVerified(provider.id);
+
     toast.success('تم إرسال تقييمك');
     setRating(0);
     setReviewComment('');
@@ -163,6 +173,14 @@ export function ProviderDetailSheet({
       toast.error(error.message);
       return;
     }
+    const { notifyUser } = await import('@/lib/notifications');
+    await notifyUser({
+      userId: provider.id,
+      type: 'report_received',
+      title: 'بلاغ جديد على حسابك',
+      body: 'تم استلام بلاغ بخصوص حسابك وسيراجعه فريق الإدارة.',
+      data: { action: 'profile' },
+    });
     toast.success('تم إرسال البلاغ، شكرًا لك');
     setReportOpen(false);
     setReportReason('');
