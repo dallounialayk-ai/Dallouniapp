@@ -67,7 +67,11 @@ export default function PrivacyPage() {
           <h2 className="text-base font-semibold">5. الاحتفاظ والحذف</h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
             نحتفظ ببياناتك طالما حسابك نشط أو حسب ما يلزم لتقديم الخدمة والامتثال للمتطلبات
-            القانونية. يمكنك طلب تصحيح بياناتك أو حذف الحساب عبر التواصل معنا.
+            القانونية. يمكنك طلب حذف الحساب وبياناتك عبر الصفحة:{' '}
+            <Link href="/delete-account" className="text-primary font-medium underline-offset-2 hover:underline">
+              طلب حذف الحساب
+            </Link>
+            .
           </p>
         </section>
 

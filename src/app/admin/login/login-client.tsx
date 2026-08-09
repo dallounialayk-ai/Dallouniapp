@@ -1,17 +1,17 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, Shield } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Eye, EyeOff, Loader2, Shield } from 'lucide-react';
 import { APP_NAME } from '@/lib/constants';
 
 export default function AdminLoginClient() {
-  const router = useRouter();
   const search = useSearchParams();
   const next = search.get('next') || '/admin';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -23,16 +23,20 @@ export default function AdminLoginClient() {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password.trim(),
+        }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error || 'فشل تسجيل الدخول');
         setLoading(false);
         return;
       }
-      router.replace(next);
-      router.refresh();
+      // انتقال كامل لضمان إرسال كوكي الجلسة مع أول طلب لـ /admin
+      window.location.assign(next.startsWith('/') ? next : '/admin');
     } catch {
       setError('تعذّر الاتصال بالخادم');
       setLoading(false);
@@ -69,19 +73,32 @@ export default function AdminLoginClient() {
               className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
               placeholder="admin@example.com"
               autoComplete="username"
+              dir="ltr"
             />
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">كلمة المرور</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="••••••••"
-              autoComplete="current-password"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full h-11 rounded-xl border border-border bg-background px-3 pl-11 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="••••••••"
+                autoComplete="current-password"
+                dir="ltr"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                title={showPassword ? 'إخفاء' : 'إظهار'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -98,6 +115,12 @@ export default function AdminLoginClient() {
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             دخول
           </button>
+
+          <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
+            بيانات الدخول من ملف <span className="font-mono">.env</span> فقط
+            (<span className="font-mono">ADMIN_EMAIL</span> / <span className="font-mono">ADMIN_PASSWORD</span>).
+            بعد تعديلها أعد تشغيل الخادم.
+          </p>
         </form>
       </div>
     </div>

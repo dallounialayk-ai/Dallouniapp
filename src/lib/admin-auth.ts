@@ -10,8 +10,9 @@ type AdminSessionPayload = {
 };
 
 function getAdminCredentials() {
-  const email = process.env.ADMIN_EMAIL?.trim();
-  const password = process.env.ADMIN_PASSWORD;
+  // إزالة المسافات الطرفية من .env (سبب شائع لفشل الدخول رغم «صحة» البيانات)
+  const email = process.env.ADMIN_EMAIL?.trim() || '';
+  const password = (process.env.ADMIN_PASSWORD ?? '').trim();
   const secret =
     process.env.ADMIN_SESSION_SECRET?.trim() ||
     (email && password ? `${email}:${password}` : '');
@@ -97,8 +98,13 @@ export function validateAdminLogin(email: string, password: string): boolean {
   const creds = getAdminCredentials();
   if (!creds.email || !creds.password) return false;
 
-  const emailOk = email.trim().toLowerCase() === creds.email.toLowerCase();
-  return emailOk && safeEqual(password, creds.password);
+  const inputEmail = email.trim().toLowerCase();
+  const inputPassword = password.trim();
+  const emailOk = inputEmail === creds.email.toLowerCase();
+  // مقارنة بعد توحيد الطول عبر البادئة لتجنّب فشل safeEqual عند اختلاف الطول فقط
+  if (!emailOk) return false;
+  if (inputPassword.length !== creds.password.length) return false;
+  return safeEqual(inputPassword, creds.password);
 }
 
 export async function getAdminSessionFromCookies() {
