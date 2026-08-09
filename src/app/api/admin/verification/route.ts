@@ -36,6 +36,20 @@ export async function GET(req: NextRequest) {
       db.from('reports').select('id', { count: 'exact', head: true }).eq('reported_id', id),
     ]);
 
+    if (profileRes.error) {
+      const msg = profileRes.error.message || '';
+      if (/admin_verified/i.test(msg) || /column/i.test(msg)) {
+        return NextResponse.json(
+          {
+            error:
+              'عمود التوثيق غير موجود في قاعدة البيانات. نفّذ ملف download/add-provider-verification.sql في Supabase SQL Editor ثم أعد المحاولة.',
+          },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
+
     if (!profileRes.data) {
       return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 });
     }

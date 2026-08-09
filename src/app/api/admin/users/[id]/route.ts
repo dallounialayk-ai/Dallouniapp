@@ -61,7 +61,19 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      const msg = error.message || '';
+      if (/admin_verified/i.test(msg) || (/column/i.test(msg) && 'admin_verified' in patch)) {
+        return NextResponse.json(
+          {
+            error:
+              'عمود التوثيق غير موجود في قاعدة البيانات. نفّذ ملف download/add-provider-verification.sql في Supabase SQL Editor ثم أعد المحاولة.',
+          },
+          { status: 500 }
+        );
+      }
+      throw error;
+    }
 
     if (patch.is_approved === true && data?.role === 'provider') {
       await insertNotif(db, {
