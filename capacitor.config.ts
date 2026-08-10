@@ -4,8 +4,12 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * غلاف Android يفتح تطبيق Next.js المنشور على Vercel.
  * عيّن NEXT_PUBLIC_APP_URL بعد أول نشر (مثال: https://dallouniapp.vercel.app)
  * لاحقاً استبدله بالنطاق المخصص دون تغيير appId.
+ *
+ * مهم: يجب أن يبقى server.url موجوداً في بناء Android وإلا يظهر www المحلي فقط.
  */
-const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
+const appUrl = (
+  process.env.NEXT_PUBLIC_APP_URL || 'https://dallouniapp.vercel.app'
+).replace(/\/$/, '');
 
 const allowNavigation = [
   '*.vercel.app',
@@ -28,12 +32,8 @@ const config: CapacitorConfig = {
   webDir: 'www',
   server: {
     androidScheme: 'https',
-    ...(appUrl
-      ? {
-          url: appUrl,
-          cleartext: false,
-        }
-      : {}),
+    url: appUrl,
+    cleartext: false,
     allowNavigation,
   },
   plugins: {
@@ -43,12 +43,15 @@ const config: CapacitorConfig = {
       backgroundColor: '#FFFFFFFF',
       androidScaleType: 'CENTER_INSIDE',
       showSpinner: false,
-      splashFullScreen: true,
-      splashImmersive: true,
+      // تجنب APIs المهملة للوضع immersive على Android 15+
+      splashFullScreen: false,
+      splashImmersive: false,
     },
-    StatusBar: {
-      style: 'DARK',
-      backgroundColor: '#ffffff',
+    // Capacitor 8: SystemBars بدل StatusBar.setBackgroundColor (مهمل)
+    SystemBars: {
+      insetsHandling: 'css',
+      style: 'LIGHT',
+      hidden: false,
     },
     Keyboard: {
       resize: 'body',

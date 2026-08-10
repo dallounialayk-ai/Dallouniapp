@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase, type Profile, type ServiceRequest, type Offer, type Message } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
-import { YEMEN_GOVERNORATES, getCategoryPath, APP_NAME } from '@/lib/constants';
+import { YEMEN_GOVERNORATES, getCategoryPath, APP_NAME, APP_VERSION } from '@/lib/constants';
 import { getInitials, formatRelativeTime, formatCurrency } from '@/lib/utils';
 
 type Conversation = {
@@ -473,7 +473,7 @@ export function UserProfileTab({
               سياسة الخصوصية
             </a>
             <div className="text-[10px] text-muted-foreground/70">
-              {APP_NAME} • الإصدار 0.2.0
+              {APP_NAME} • الإصدار {APP_VERSION}
             </div>
           </div>
         </div>

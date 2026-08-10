@@ -24,7 +24,7 @@ import { toast } from 'sonner';
 import { supabase, type Profile, type CatalogItem, type Message } from '@/lib/supabase';
 import { useAuth } from '@/store/auth';
 import {
-  YEMEN_GOVERNORATES, getCategoryName, getCategoryPath, APP_NAME,
+  YEMEN_GOVERNORATES, getCategoryName, getCategoryPath, APP_NAME, APP_VERSION,
   PRODUCT_UNITS, isBuildingMaterialsProvider,
 } from '@/lib/constants';
 import { ServiceCategoryPicker } from '@/components/shared/ServiceCategoryPicker';
@@ -716,7 +716,7 @@ export function ProviderProfileTab({
               سياسة الخصوصية
             </a>
             <div className="text-[10px] text-muted-foreground/70">
-              {APP_NAME} • الإصدار 0.2.0
+              {APP_NAME} • الإصدار {APP_VERSION}
             </div>
           </div>
         </div>

@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { StatusBar, Style } from '@capacitor/status-bar';
 import { App as CapApp } from '@capacitor/app';
 
 /**
  * تهيئة غلاف Capacitor عند التشغيل على Android/iOS:
- * شريط الحالة، إخفاء الـ splash، ومعالجة زر الرجوع.
+ * System Bars (edge-to-edge)، إخفاء الـ splash، ومعالجة زر الرجوع.
  */
 export function CapAppInit() {
   useEffect(() => {
@@ -18,8 +17,9 @@ export function CapAppInit() {
 
     void (async () => {
       try {
-        await StatusBar.setStyle({ style: Style.Dark });
-        await StatusBar.setBackgroundColor({ color: '#ffffff' });
+        // SystemBars بدل StatusBar.setBackgroundColor (مهمل على Android 15+)
+        // Light = أيقونات داكنة فوق خلفية فاتحة
+        await SystemBars.setStyle({ style: SystemBarsStyle.Light });
       } catch {
         // بعض الأجهزة لا تدعم ضبط شريط الحالة
       }
