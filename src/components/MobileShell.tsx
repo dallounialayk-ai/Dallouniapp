@@ -17,7 +17,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
       <div className="mobile-shell-frame">
         <div
           id={APP_PORTAL_ROOT_ID}
-          className="relative flex flex-col flex-1 min-h-0 min-w-0 w-full h-full overflow-x-hidden overflow-y-hidden"
+          className="relative flex flex-col flex-1 min-h-0 min-w-0 w-full h-full overflow-x-hidden overflow-y-hidden capacitor-shell-content"
         >
           {children}
         </div>

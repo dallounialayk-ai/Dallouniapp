@@ -54,8 +54,9 @@ const config: CapacitorConfig = {
       hidden: false,
     },
     Keyboard: {
+      // على Android المهم resizeOnFullScreen — تفعيله مع edge-to-edge يسبب اهتزازاً وتعارضاً
       resize: 'body',
-      resizeOnFullScreen: true,
+      resizeOnFullScreen: false,
     },
   },
   android: {

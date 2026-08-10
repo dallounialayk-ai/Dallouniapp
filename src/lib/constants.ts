@@ -489,7 +489,7 @@ export const YEMEN_GOVERNORATES = [
 ];
 
 export const APP_NAME = 'دلّوني عليك';
-export const APP_VERSION = '0.3.3';
+export const APP_VERSION = '0.3.4';
 export const APP_TAGLINE = 'حلقة الوصل بينك وبين كل من تحتاجه لبناء منزلك';
 
 /** فئة خدمة مواد البناء — لها كاتلوج منتجات بأسعار بدلاً من أعمال سابقة */

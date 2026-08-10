@@ -438,6 +438,40 @@ button:active, a:active, [role="button"]:active {
   padding-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px)) !important;
 }
 
+/* ===========================================
+   Capacitor native — كيبورد بدون اهتزاز/قص الحقول
+   =========================================== */
+html.capacitor-native,
+html.capacitor-native body {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+html.capacitor-native .mobile-shell-root,
+html.capacitor-native .mobile-shell-frame {
+  /* تجنّب 100dvh أثناء الكيبورد — يسبب قفزاً على بعض أجهزة Android */
+  height: 100%;
+  min-height: 100%;
+  max-height: 100%;
+}
+
+html.capacitor-native .capacitor-shell-content {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* عند فتح الكيبورد: لا تكبّر padding السفلي بارتفاع IME (مصدر الاهتزاز) */
+html.capacitor-native.keyboard-open .mobile-shell-frame {
+  padding-bottom: 0;
+}
+
+html.capacitor-native.keyboard-open .capacitor-shell-content {
+  overflow-y: auto;
+}
+
 /* ارتفاع موبايل حقيقي مع دعم dvh */
 .h-mobile {
   height: 100vh;
