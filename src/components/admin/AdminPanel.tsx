@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, Users, Briefcase, Bell, Flag, Settings,
-  LogOut, Download, Search, Check, X, Star, Loader2, RefreshCw, BadgeCheck,
+  LayoutDashboard, Users, Briefcase, ClipboardList, Bell, Flag, Settings,
+  LogOut, Download, Search, Check, X, Star, Loader2, RefreshCw, BadgeCheck, Trash2,
 } from 'lucide-react';
-import { APP_NAME, YEMEN_GOVERNORATES, getCategoryName, getCategoryPath } from '@/lib/constants';
+import { APP_NAME, YEMEN_GOVERNORATES, getCategoryName, getCategoryPath, getDeadlineLabel } from '@/lib/constants';
+import { formatDeadlineRemaining } from '@/lib/utils';
 import { ServiceCategoryPicker } from '@/components/shared/ServiceCategoryPicker';
 import {
   VERIFIED_MAX_REPORTS,
@@ -15,7 +16,7 @@ import {
 } from '@/lib/verification';
 import { toast } from 'sonner';
 
-type Tab = 'dashboard' | 'users' | 'providers' | 'notifications' | 'reports' | 'settings';
+type Tab = 'dashboard' | 'users' | 'providers' | 'requests' | 'notifications' | 'reports' | 'settings';
 
 type Stats = {
   totals: Record<string, number>;
@@ -42,6 +43,32 @@ type ProfileRow = {
   created_at: string;
 };
 
+type RequestRow = {
+  id: string;
+  user_id: string;
+  category: string;
+  title: string;
+  description: string;
+  governorate: string;
+  status: 'open' | 'closed' | string;
+  latitude: number | null;
+  longitude: number | null;
+  location_label: string | null;
+  created_at: string;
+  deadline_days?: number | null;
+  expires_at?: string | null;
+  offers_count?: number;
+  profile?: {
+    id: string;
+    full_name: string;
+    email: string;
+    phone: string;
+    whatsapp_number: string | null;
+    governorate: string;
+    role: string;
+  } | null;
+};
+
 type ReportRow = {
   id: string;
   reason: string;
@@ -57,6 +84,7 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'الإحصائيات', icon: LayoutDashboard },
   { id: 'users', label: 'المستخدمون', icon: Users },
   { id: 'providers', label: 'أصحاب المهن', icon: Briefcase },
+  { id: 'requests', label: 'طلبات الخدمة', icon: ClipboardList },
   { id: 'notifications', label: 'الإشعارات', icon: Bell },
   { id: 'reports', label: 'البلاغات', icon: Flag },
   { id: 'settings', label: 'الإعدادات', icon: Settings },
@@ -162,6 +190,7 @@ export function AdminPanel() {
           {tab === 'dashboard' && <DashboardView stats={stats} loading={statsLoading} />}
           {tab === 'users' && <UsersView role="user" />}
           {tab === 'providers' && <UsersView role="provider" />}
+          {tab === 'requests' && <RequestsView />}
           {tab === 'notifications' && <NotificationsView />}
           {tab === 'reports' && <ReportsView />}
           {tab === 'settings' && <SettingsView />}
@@ -750,6 +779,332 @@ function Info({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl bg-muted/40 px-3 py-2">
       <div className="text-[10px] text-muted-foreground">{label}</div>
       <div className="font-medium mt-0.5 break-all">{value}</div>
+    </div>
+  );
+}
+
+function RequestsView() {
+  const [items, setItems] = useState<RequestRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('all');
+  const [governorate, setGovernorate] = useState('');
+  const [category, setCategory] = useState('');
+  const [selected, setSelected] = useState<RequestRow | null>(null);
+
+  const queryString = useMemo(() => {
+    const p = new URLSearchParams({
+      page: String(page),
+      limit: '25',
+      status,
+    });
+    if (q) p.set('q', q);
+    if (governorate) p.set('governorate', governorate);
+    if (category) p.set('category', category);
+    return p.toString();
+  }, [page, status, q, governorate, category]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/requests?${queryString}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'فشل جلب الطلبات');
+      setItems(data.items ?? []);
+      setTotal(data.total ?? 0);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'فشل جلب الطلبات');
+    } finally {
+      setLoading(false);
+    }
+  }, [queryString]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, status, governorate, category]);
+
+  const deleteRequest = async (row: RequestRow) => {
+    const ok = window.confirm(
+      `حذف طلب الخدمة «${row.title}»؟\nسيتم حذف العروض المرتبطة به ولا يمكن التراجع.`
+    );
+    if (!ok) return;
+    setDeletingId(row.id);
+    try {
+      const res = await fetch(`/api/admin/requests/${row.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'فشل الحذف');
+      toast.success('تم حذف الطلب');
+      if (selected?.id === row.id) setSelected(null);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'فشل الحذف');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="بحث بالعنوان / الوصف / صاحب الطلب"
+            className="w-full h-10 rounded-xl border border-border bg-white pr-9 pl-3 text-sm"
+          />
+        </div>
+        <button
+          onClick={() => void load()}
+          className="h-10 w-10 rounded-xl border border-border flex items-center justify-center hover:bg-muted"
+          title="تحديث"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <FilterSelect
+          label="الحالة"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: 'all', label: 'الكل' },
+            { value: 'open', label: 'مفتوح' },
+            { value: 'closed', label: 'مغلق' },
+          ]}
+        />
+        <FilterSelect
+          label="المحافظة"
+          value={governorate}
+          onChange={setGovernorate}
+          options={[
+            { value: '', label: 'الكل' },
+            ...YEMEN_GOVERNORATES.map((g) => ({ value: g, label: g })),
+          ]}
+        />
+        <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 bg-white border border-border rounded-xl px-2 h-10 min-w-[220px]">
+          <span className="whitespace-nowrap">التخصص</span>
+          <div className="flex-1 min-w-0">
+            <ServiceCategoryPicker
+              value={category || 'all'}
+              onChange={(v) => setCategory(v === 'all' ? '' : v)}
+              mode="filter"
+              allowAll
+              placeholder="الكل"
+              triggerClassName="w-full h-8 border-0 bg-transparent px-1 text-sm text-right flex items-center justify-between gap-1"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border/60 bg-white overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[860px]">
+            <thead className="bg-muted/50 text-xs text-muted-foreground">
+              <tr>
+                {['الطلب', 'صاحب الطلب', 'التخصص', 'المحافظة', 'الحالة', 'العروض', 'التاريخ', ''].map(
+                  (h) => (
+                    <th key={h || 'actions'} className="text-right font-medium px-3 py-2.5">
+                      {h}
+                    </th>
+                  )
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="py-16 text-center text-muted-foreground">
+                    <Loader2 className="w-5 h-5 animate-spin inline-block ml-2" />
+                    جاري التحميل…
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-16 text-center text-muted-foreground text-sm">
+                    لا توجد طلبات خدمة
+                  </td>
+                </tr>
+              ) : (
+                items.map((r) => {
+                  const deadline = formatDeadlineRemaining(r.expires_at);
+                  return (
+                    <tr
+                      key={r.id}
+                      className="border-t border-border/40 hover:bg-muted/30 cursor-pointer"
+                      onClick={() => setSelected(r)}
+                    >
+                      <td className="px-3 py-2.5">
+                        <div className="font-medium line-clamp-1">{r.title}</div>
+                        <div className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                          {r.description}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="font-medium">{r.profile?.full_name || '—'}</div>
+                        <div className="text-[11px] text-muted-foreground" dir="ltr">
+                          {r.profile?.phone || r.profile?.email || ''}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-xs">
+                        {getCategoryPath(r.category) || getCategoryName(r.category) || r.category}
+                      </td>
+                      <td className="px-3 py-2.5">{r.governorate}</td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className={`text-[11px] px-2 py-0.5 rounded-full ${
+                            r.status === 'open'
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {r.status === 'open' ? 'مفتوح' : 'مغلق'}
+                        </span>
+                        {deadline && (
+                          <div
+                            className={`text-[10px] mt-1 ${
+                              deadline.expired || deadline.urgent
+                                ? 'text-destructive'
+                                : 'text-muted-foreground'
+                            }`}
+                          >
+                            {deadline.text}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">{r.offers_count ?? 0}</td>
+                      <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(r.created_at).toLocaleString('ar-YE')}
+                      </td>
+                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          disabled={deletingId === r.id}
+                          onClick={() => void deleteRequest(r)}
+                          className="h-9 px-3 rounded-xl border border-destructive/30 text-destructive text-xs inline-flex items-center gap-1 hover:bg-destructive/5 disabled:opacity-50"
+                        >
+                          {deletingId === r.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                          حذف
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between px-3 py-2 border-t border-border/40 text-xs text-muted-foreground">
+          <span>
+            {total} نتيجة — صفحة {page}
+          </span>
+          <div className="flex gap-2">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-2 py-1 rounded-lg border disabled:opacity-40"
+            >
+              السابق
+            </button>
+            <button
+              disabled={page * 25 >= total}
+              onClick={() => setPage((p) => p + 1)}
+              className="px-2 py-1 rounded-lg border disabled:opacity-40"
+            >
+              التالي
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {selected && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-0 md:p-4">
+          <div className="bg-white w-full md:max-w-lg rounded-t-3xl md:rounded-3xl p-5 space-y-4 max-h-[90dvh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-lg">{selected.title}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {selected.status === 'open' ? 'طلب مفتوح' : 'طلب مغلق'}
+                </p>
+              </div>
+              <button onClick={() => setSelected(null)} className="p-2 rounded-xl hover:bg-muted">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-sm leading-relaxed bg-muted/40 rounded-xl p-3 whitespace-pre-wrap">
+              {selected.description}
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <Info
+                label="التخصص"
+                value={
+                  getCategoryPath(selected.category) ||
+                  getCategoryName(selected.category) ||
+                  selected.category
+                }
+              />
+              <Info label="المحافظة" value={selected.governorate} />
+              <Info label="صاحب الطلب" value={selected.profile?.full_name || '—'} />
+              <Info label="الهاتف" value={selected.profile?.phone || '—'} />
+              <Info label="البريد" value={selected.profile?.email || '—'} />
+              <Info label="واتساب" value={selected.profile?.whatsapp_number || '—'} />
+              <Info label="الموقع" value={selected.location_label || '—'} />
+              <Info
+                label="الإحداثيات"
+                value={
+                  selected.latitude != null
+                    ? `${selected.latitude.toFixed(5)}, ${selected.longitude?.toFixed(5) ?? '—'}`
+                    : '—'
+                }
+              />
+              <Info
+                label="مهلة الطلب"
+                value={getDeadlineLabel(selected.deadline_days) || '—'}
+              />
+              <Info
+                label="ينتهي في"
+                value={
+                  selected.expires_at
+                    ? new Date(selected.expires_at).toLocaleString('ar-YE')
+                    : '—'
+                }
+              />
+              <Info label="عدد العروض" value={String(selected.offers_count ?? 0)} />
+              <Info
+                label="تاريخ الإنشاء"
+                value={new Date(selected.created_at).toLocaleString('ar-YE')}
+              />
+            </div>
+
+            <button
+              disabled={deletingId === selected.id}
+              onClick={() => void deleteRequest(selected)}
+              className="w-full h-11 rounded-xl border border-destructive/30 text-destructive text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-destructive/5 disabled:opacity-50"
+            >
+              {deletingId === selected.id ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              حذف الطلب
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
