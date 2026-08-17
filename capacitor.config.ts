@@ -1,4 +1,5 @@
 import type { CapacitorConfig } from '@capacitor/cli';
+import { KeyboardResize } from '@capacitor/keyboard';
 
 /**
  * غلاف Android يفتح تطبيق Next.js المنشور على Vercel.
@@ -55,7 +56,7 @@ const config: CapacitorConfig = {
     },
     Keyboard: {
       // على Android المهم resizeOnFullScreen — تفعيله مع edge-to-edge يسبب اهتزازاً وتعارضاً
-      resize: 'body',
+      resize: KeyboardResize.Body,
       resizeOnFullScreen: false,
     },
   },

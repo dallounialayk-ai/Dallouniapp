@@ -30,7 +30,15 @@ export async function GET(req: NextRequest) {
       matchingUserIds = (profiles ?? []).map((p) => p.id as string);
     }
 
-    const applyFilters = (query: ReturnType<ReturnType<typeof getSupabaseAdmin>['from']>) => {
+    const applyFilters = <
+      T extends {
+        eq: (column: string, value: string) => T;
+        in: (column: string, values: string[]) => T;
+        or: (filters: string) => T;
+      },
+    >(
+      query: T
+    ): T => {
       let next = query;
       if (status === 'open' || status === 'closed') next = next.eq('status', status);
       if (governorate) next = next.eq('governorate', governorate);
@@ -61,12 +69,13 @@ export async function GET(req: NextRequest) {
       offers(count)
     `;
 
-    let query = db
-      .from('service_requests')
-      .select(selectWithJoin, { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to);
-    query = applyFilters(query as never);
+    const query = applyFilters(
+      db
+        .from('service_requests')
+        .select(selectWithJoin, { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to)
+    );
 
     const { data, error, count } = await query;
     if (!error) {
@@ -79,17 +88,19 @@ export async function GET(req: NextRequest) {
           ? Number(offersRaw[0]?.count ?? 0)
           : Number(offersRaw ?? 0);
         const { offers: _omit, ...rest } = r;
+        void _omit;
         return { ...rest, offers_count };
       });
       return NextResponse.json({ items, total: count ?? 0, page, limit });
     }
 
-    let fallback = db
-      .from('service_requests')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to);
-    fallback = applyFilters(fallback as never);
+    const fallback = applyFilters(
+      db
+        .from('service_requests')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to)
+    );
     const fb = await fallback;
     if (fb.error) throw fb.error;
 
