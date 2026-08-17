@@ -266,6 +266,7 @@ function UsersView({ role }: { role: 'user' | 'provider' }) {
   const [selected, setSelected] = useState<ProfileRow | null>(null);
   const [ratingValue, setRatingValue] = useState('5');
   const [ratingNote, setRatingNote] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [verification, setVerification] = useState<{
     verified: boolean;
     source: string;
@@ -359,6 +360,27 @@ function UsersView({ role }: { role: 'user' | 'provider' }) {
     toast.success('تم التحديث');
     await load();
     if (selected?.id === id) setSelected(data.item);
+  };
+
+  const deleteUser = async (row: ProfileRow) => {
+    const kind = row.role === 'provider' ? 'صاحب المهنة' : 'المستخدم';
+    const ok = window.confirm(
+      `حذف ${kind} «${row.full_name}» نهائياً من قاعدة البيانات؟\nسيتم حذف الطلبات والعروض والرسائل والملفات المرتبطة، ولا يمكن التراجع.`
+    );
+    if (!ok) return;
+    setDeletingId(row.id);
+    try {
+      const res = await fetch(`/api/admin/users/${row.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'فشل الحذف');
+      toast.success('تم حذف الحساب نهائياً');
+      if (selected?.id === row.id) setSelected(null);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'فشل الحذف');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const columns = role === 'provider'
@@ -514,16 +536,30 @@ function UsersView({ role }: { role: 'user' | 'provider' }) {
                       {new Date(u.created_at).toLocaleDateString('ar-YE')}
                     </td>
                     <td className="px-3 py-2.5">
-                      <button
-                        onClick={() => {
-                          setSelected(u);
-                          setRatingValue(String(u.rating_override ?? 5));
-                          setRatingNote(u.rating_override_note ?? '');
-                        }}
-                        className="text-xs text-primary font-medium hover:underline"
-                      >
-                        إدارة
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setSelected(u);
+                            setRatingValue(String(u.rating_override ?? 5));
+                            setRatingNote(u.rating_override_note ?? '');
+                          }}
+                          className="text-xs text-primary font-medium hover:underline"
+                        >
+                          إدارة
+                        </button>
+                        <button
+                          disabled={deletingId === u.id}
+                          onClick={() => void deleteUser(u)}
+                          className="h-8 px-2 rounded-lg border border-destructive/30 text-destructive text-xs inline-flex items-center gap-1 hover:bg-destructive/5 disabled:opacity-50"
+                        >
+                          {deletingId === u.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                          حذف
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -738,6 +774,19 @@ function UsersView({ role }: { role: 'user' | 'provider' }) {
                 </p>
               )}
             </div>
+
+            <button
+              disabled={deletingId === selected.id}
+              onClick={() => void deleteUser(selected)}
+              className="w-full h-11 rounded-xl border border-destructive/30 text-destructive text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-destructive/5 disabled:opacity-50"
+            >
+              {deletingId === selected.id ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              حذف الحساب نهائياً
+            </button>
           </div>
         </div>
       )}

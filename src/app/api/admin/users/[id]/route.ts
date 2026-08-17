@@ -148,3 +148,58 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+async function removeUserStorageFiles(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  userId: string
+) {
+  for (const bucket of ['avatars', 'catalog'] as const) {
+    const { data } = await db.storage.from(bucket).list('', {
+      limit: 1000,
+      search: userId,
+    });
+    const names = (data ?? [])
+      .map((f) => f.name)
+      .filter((name) => name.startsWith(userId));
+    if (names.length) {
+      await db.storage.from(bucket).remove(names);
+    }
+  }
+}
+
+export async function DELETE(_req: NextRequest, ctx: Ctx) {
+  if (!(await requireAdminApi())) return adminUnauthorized();
+  const { id } = await ctx.params;
+  if (!id) return NextResponse.json({ error: 'معرّف المستخدم مطلوب' }, { status: 400 });
+
+  try {
+    const db = getSupabaseAdmin();
+    const { data: profile, error: fetchError } = await db
+      .from('profiles')
+      .select('id, full_name, role')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!profile) {
+      return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 });
+    }
+
+    await removeUserStorageFiles(db, id);
+
+    const { error: authError } = await db.auth.admin.deleteUser(id);
+    if (authError) {
+      // إن لم يوجد في Auth أو فشل الكاسكيد: احذف الملف الشخصي مباشرة
+      const { error: profileError } = await db.from('profiles').delete().eq('id', id);
+      if (profileError) {
+        throw new Error(authError.message || profileError.message);
+      }
+    }
+
+    return NextResponse.json({ ok: true, id, name: profile.full_name, role: profile.role });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'تعذّر حذف المستخدم';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
